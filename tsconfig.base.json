@@ -4,6 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
+    "downlevelIteration": true,
     
     "strict": true,
     "noImplicitAny": true,

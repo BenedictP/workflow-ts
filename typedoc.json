@@ -10,5 +10,6 @@
   "sort": ["source-order"],
   "categorizeByGroup": true,
   "useCodeBlocks": true,
-  "flattenOutput": true
+  "flattenOutputFiles": true,
+  "tsconfig": "typedoc.tsconfig.json"
 }

@@ -1,4 +1,4 @@
-import type { Workflow } from '@workflow-ts/core';
+import type { Workflow, WorkflowRuntime as WorkflowRuntimeType } from '@workflow-ts/core';
 import { createRuntime } from '@workflow-ts/core';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
@@ -31,8 +31,8 @@ export function useWorkflow<P, S, O, R>(
   onOutputRef.current = onOutput;
 
   // Create runtime once per workflow
-  const [runtime] = useState(() => {
-    return createRuntime(workflow, props, (output) => {
+  const [runtime] = useState<WorkflowRuntimeType<P, S, O, R>>(() => {
+    return createRuntime(workflow, props, (output: O) => {
       onOutputRef.current?.(output);
     });
   });
@@ -111,8 +111,8 @@ export function useWorkflowWithState<P, S, O, R>(
   onOutputRef.current = options.onOutput;
 
   // Create runtime once per workflow
-  const [runtime] = useState(() => {
-    return createRuntime(workflow, options.props, (output) => {
+  const [runtime] = useState<WorkflowRuntimeType<P, S, O, R>>(() => {
+    return createRuntime(workflow, options.props, (output: O) => {
       onOutputRef.current?.(output);
     });
   });

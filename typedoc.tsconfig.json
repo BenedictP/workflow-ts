@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "baseUrl": ".",
+    "paths": {
+      "@workflow-ts/core": ["packages/core/src"],
+      "@workflow-ts/react": ["packages/react/src"]
+    },
+    "types": ["node", "react"],
+    "typeRoots": [
+      "./packages/react/node_modules/@types",
+      "./packages/core/node_modules/@types",
+      "./node_modules/@types"
+    ],
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"],
+  "exclude": ["**/test/**", "**/*.test.ts", "**/*.test.tsx"]
+}

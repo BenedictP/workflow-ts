@@ -27,7 +27,7 @@
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean",
     "ci": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
-    "docs:api": "typedoc --entryPoints packages/core/src/index.ts --entryPoints packages/react/src/index.ts --out docs-dist/api --plugin typedoc-plugin-markdown",
+    "docs:api": "typedoc --entryPoints packages/core/src/index.ts --entryPoints packages/react/src/index.ts --out docs-dist/api --plugin typedoc-plugin-markdown --tsconfig typedoc.tsconfig.json",
     "docs:build": "mkdir -p docs-dist && cp -r docs/* docs-dist/ && pnpm docs:api",
     "docs:serve": "npx serve docs-dist"
   },

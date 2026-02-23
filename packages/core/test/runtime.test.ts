@@ -398,7 +398,7 @@ describe('Child workflow lifecycle', () => {
     
     const trackingChildWorkflow: Workflow<number, ChildState, never, ChildRendering> = {
       initialState: (props) => ({ value: props }),
-      render: (props, state, ctx) => ({
+      render: (_props, state, ctx) => ({
         value: state.value,
         onIncrement: () => {
           ctx.actionSink.send((s) => ({ value: s.value + 1 }));
@@ -431,6 +431,39 @@ describe('Child workflow lifecycle', () => {
     // Child is reused with same state (5), not recreated with new props (10)
     expect(childStates[childStates.length - 1]).toBe(5);
     
+    runtime.dispose();
+  });
+
+  it('should update child props even without output handler', () => {
+    const childProps: number[] = [];
+
+    const propsChildWorkflow: Workflow<number, ChildState, never, ChildRendering> = {
+      initialState: (props) => ({ value: props }),
+      render: (props, state) => {
+        childProps.push(props);
+        return { value: state.value, onIncrement: () => {} };
+      },
+    };
+
+    const parentWorkflow: Workflow<number, ParentState, never, ParentRendering> = {
+      initialState: () => ({ childOutputs: [] }),
+      render: (props, state, ctx) => {
+        const childRendering = ctx.renderChild(propsChildWorkflow, props, 'child-props');
+        return {
+          childValue: childRendering.value,
+          childOutputs: state.childOutputs,
+        };
+      },
+    };
+
+    const runtime = createRuntime(parentWorkflow, 1);
+    runtime.getRendering();
+
+    runtime.updateProps(2);
+    runtime.getRendering();
+
+    expect(childProps).toEqual([1, 2]);
+
     runtime.dispose();
   });
 

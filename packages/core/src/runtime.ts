@@ -229,7 +229,7 @@ export class WorkflowRuntime<P, S, O, R> {
             : undefined,
       });
       this.childRuntimes.set(childKey, child);
-    } else if (handler !== undefined) {
+    } else {
       // Update props if child already exists - this allows child to react to prop changes
       child.updateProps(props);
     }

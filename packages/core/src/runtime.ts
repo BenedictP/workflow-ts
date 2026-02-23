@@ -242,10 +242,17 @@ export class WorkflowRuntime<P, S, O, R> {
     key: string,
     handler: (output: W) => Action<S, O>,
   ): void {
+    if (!this.workerManager.isInRenderCycle) {
+      console.warn(
+        'runWorker was called outside of render; workers started here may be stopped unexpectedly.',
+      );
+    }
+
     this.workerManager.startWorker<W>(
       worker,
       key,
       (output: W): void => {
+        if (this.disposed) return;
         this.handleAction(handler(output));
       },
       (): void => {

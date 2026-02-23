@@ -352,6 +352,28 @@ describe('Workflow with workers', () => {
 
     expect(wasAborted()).toBe(true);
   });
+
+  it('should ignore worker output after runtime is disposed', async () => {
+    const testWorker = createWorker('test', async () => {
+      return 'done';
+    });
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(testWorker, 'test', () => (s) => ({ state: { count: s.count + 1 } }));
+        return { count: state.count };
+      },
+    };
+
+    const runtime = createRuntime(workflow, undefined);
+    runtime.getRendering();
+    runtime.dispose();
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(runtime.getState().count).toBe(0);
+  });
 });
 
 // ============================================================

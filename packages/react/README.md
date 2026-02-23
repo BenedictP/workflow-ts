@@ -10,7 +10,7 @@ pnpm add @workflow-ts/react @workflow-ts/core
 
 ## Hooks
 
-### `useWorkflow(workflow, props, onOutput?)`
+### `useWorkflow(workflow, props, onOutput?, options?)`
 
 Subscribe to a workflow's rendering. Re-renders component when workflow state changes.
 
@@ -42,6 +42,10 @@ function Counter() {
 - `workflow` - The workflow definition
 - `props` - Props to pass to the workflow
 - `onOutput?` - Optional callback for workflow outputs
+- `options?` - Optional hook options
+
+**Options:**
+- `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`. To hard-reset in React, consider using a component `key`.
 
 **Returns:** The current rendering (type `R` from workflow)
 
@@ -78,6 +82,7 @@ function SearchComponent() {
 **Options:**
 - `props: P` - Initial props
 - `onOutput?: (output: O) => void` - Output callback
+- `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`.
 
 **Returns:**
 - `rendering: R` - Current rendering

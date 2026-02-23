@@ -1,6 +1,6 @@
-import type { Workflow, WorkflowRuntime as WorkflowRuntimeType } from '@workflow-ts/core';
+import type { Workflow } from '@workflow-ts/core';
 import { createRuntime } from '@workflow-ts/core';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 /**
  * Hook to use a workflow in a React component.
@@ -22,20 +22,27 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
  * );
  * ```
  */
+export interface UseWorkflowHookOptions {
+  /** Reset runtime when workflow identity changes (opt-in) */
+  resetOnWorkflowChange?: boolean;
+}
+
 export function useWorkflow<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
   onOutput?: (output: O) => void,
+  options?: UseWorkflowHookOptions,
 ): R {
   const onOutputRef = useRef(onOutput);
   onOutputRef.current = onOutput;
 
-  // Create runtime once per workflow
-  const [runtime] = useState<WorkflowRuntimeType<P, S, O, R>>(() => {
+  const resetOnWorkflowChange = options?.resetOnWorkflowChange === true;
+  const runtimeKey = resetOnWorkflowChange ? workflow : 'static-runtime';
+  const runtime = useMemo(() => {
     return createRuntime(workflow, props, (output: O) => {
       onOutputRef.current?.(output);
     });
-  });
+  }, [runtimeKey]);
 
   // Dispose on unmount
   useEffect(() => {
@@ -47,12 +54,11 @@ export function useWorkflow<P, S, O, R>(
     runtime.updateProps(props);
   }, [runtime, props]);
 
+  const subscribe = useMemo(() => (listener: () => void) => runtime.subscribe(listener), [runtime]);
+  const getRenderingSnapshot = useMemo(() => () => runtime.getRendering(), [runtime]);
+
   // Subscribe to rendering changes
-  return useSyncExternalStore(
-    useMemo(() => (listener: () => void) => runtime.subscribe(listener), [runtime]),
-    useMemo(() => () => runtime.getRendering(), [runtime]),
-    useMemo(() => () => runtime.getRendering(), [runtime]),
-  );
+  return useSyncExternalStore(subscribe, getRenderingSnapshot, getRenderingSnapshot);
 }
 
 /**
@@ -63,6 +69,8 @@ export interface UseWorkflowOptions<P, O> {
   props: P;
   /** Callback for workflow outputs */
   onOutput?: (output: O) => void;
+  /** Reset runtime when workflow identity changes (opt-in) */
+  resetOnWorkflowChange?: boolean;
 }
 
 /**
@@ -110,33 +118,55 @@ export function useWorkflowWithState<P, S, O, R>(
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
 
-  // Create runtime once per workflow
-  const [runtime] = useState<WorkflowRuntimeType<P, S, O, R>>(() => {
+  const resetOnWorkflowChange = options.resetOnWorkflowChange === true;
+  const runtimeKey = resetOnWorkflowChange ? workflow : 'static-runtime';
+  const runtime = useMemo(() => {
     return createRuntime(workflow, options.props, (output: O) => {
       onOutputRef.current?.(output);
     });
-  });
-
-  // Track version to force re-renders
-  const [, setVersion] = useState(0);
+  }, [runtimeKey]);
 
   // Dispose on unmount
   useEffect(() => {
     return () => { runtime.dispose(); };
   }, [runtime]);
 
-  // Subscribe to changes
+  // Update props when they change
   useEffect(() => {
-    return runtime.subscribe(() => {
-      setVersion((v) => v + 1);
-    });
+    runtime.updateProps(options.props);
+  }, [runtime, options.props]);
+
+  const getSnapshot = useMemo(() => {
+    let lastSnapshot: UseWorkflowResult<P, S, R> | null = null;
+    return () => {
+      const rendering = runtime.getRendering();
+      const state = runtime.getState();
+      const props = runtime.getProps();
+
+      if (lastSnapshot !== null) {
+        if (
+          lastSnapshot.rendering === rendering &&
+          lastSnapshot.state === state &&
+          lastSnapshot.props === props
+        ) {
+          return lastSnapshot;
+        }
+      }
+
+      lastSnapshot = {
+        rendering,
+        state,
+        props,
+        updateProps: (nextProps: P) => { runtime.updateProps(nextProps); },
+        snapshot: () => runtime.snapshot(),
+      };
+
+      return lastSnapshot;
+    };
   }, [runtime]);
 
-  return {
-    rendering: runtime.getRendering(),
-    state: runtime.getState(),
-    props: runtime.getProps(),
-    updateProps: (props: P) => { runtime.updateProps(props); },
-    snapshot: () => runtime.snapshot(),
-  };
+  const subscribe = useMemo(() => (listener: () => void) => runtime.subscribe(listener), [runtime]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  return snapshot;
 }

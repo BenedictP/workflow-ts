@@ -465,9 +465,9 @@ describe('Child workflow lifecycle', () => {
     expect(runtime.getRendering().childValue).toBe(9);
     
     // Increment child to trigger output
-    runtime.getRendering().childValue; // Access child
-    // We need to access the child's onIncrement
-    // Let's get the child rendering directly
+    const initialRendering = runtime.getRendering();
+    expect(initialRendering.childValue).toBe(9);
+    // TODO: trigger child increment when child workflow exposes an action API
     
     runtime.dispose();
   });

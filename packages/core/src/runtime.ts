@@ -51,9 +51,7 @@ export class WorkflowRuntime<P, S, O, R> {
   public getRendering(): R {
     this.assertNotDisposed();
 
-    if (this.cachedRendering === null) {
-      this.cachedRendering = this.performRender();
-    }
+    this.cachedRendering ??= this.performRender();
     return this.cachedRendering;
   }
 
@@ -275,9 +273,17 @@ export class WorkflowRuntime<P, S, O, R> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getWorkflowKey(workflow: Workflow<any, any, any, any>): string {
-    // Use constructor name or toString as fallback
-    const constructor = (workflow as object).constructor;
-    return constructor.name !== '' ? constructor.name : String(workflow);
+    const constructor = (workflow as object).constructor as { name?: string } | undefined;
+    const name = constructor?.name ?? '';
+    if (name.length > 0) {
+      return name;
+    }
+
+    if (typeof workflow === 'object') {
+      return JSON.stringify(workflow);
+    }
+
+    return String(workflow);
   }
 }
 

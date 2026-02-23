@@ -191,10 +191,6 @@ See the [`examples/`](./examples) directory:
 - **Login Flow** - Multi-step state machine with validation
 - **Nested Workflows** - Parent-child composition
 
-## Documentation system
-
-We currently publish Markdown + TypeDoc to GitHub Pages. If you want a more structured site, Docusaurus is a good fit (versioned docs, sidebar nav, search). I can add a Docusaurus setup and migrate these guides if you want to proceed.
-
 ## Documentation
 
 - Docs site: https://aicodehelper.github.io/workflow-ts/

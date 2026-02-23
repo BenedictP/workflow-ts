@@ -17,6 +17,8 @@ export interface RuntimeConfig<P, S, O, R> {
   readonly onOutput?: ((output: O) => void) | undefined;
   /** Optional initial state (for testing) */
   readonly initialState?: S | undefined;
+  /** Optional snapshot to restore state from */
+  readonly snapshot?: string | undefined;
 }
 
 /**
@@ -41,7 +43,13 @@ export class WorkflowRuntime<P, S, O, R> {
   private disposed = false;
 
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
-    this.state = config.initialState ?? config.workflow.initialState(config.props);
+    const restoredState =
+      config.snapshot !== undefined
+        ? (config.workflow.restore?.(config.snapshot) ??
+            config.workflow.initialState(config.props, config.snapshot))
+        : undefined;
+
+    this.state = config.initialState ?? restoredState ?? config.workflow.initialState(config.props);
     this.currentProps = config.props;
   }
 
@@ -315,6 +323,7 @@ export function createRuntime<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
   onOutput?: (output: O) => void,
+  snapshot?: string,
 ): WorkflowRuntime<P, S, O, R> {
-  return new WorkflowRuntime({ workflow, props, onOutput });
+  return new WorkflowRuntime({ workflow, props, onOutput, snapshot });
 }

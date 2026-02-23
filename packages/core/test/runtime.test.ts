@@ -648,6 +648,43 @@ describe('Snapshot/restore workflow state', () => {
     runtime.dispose();
   });
 
+  it('should restore state from snapshot when provided', () => {
+    const runtime = createRuntime(
+      snapshotWorkflow,
+      undefined,
+      undefined,
+      '{"count":7,"name":"restored"}',
+    );
+
+    expect(runtime.getState()).toEqual({ count: 7, name: 'restored' });
+    expect(runtime.getRendering().display).toBe('restored: 7');
+
+    runtime.dispose();
+  });
+
+  it('should prefer restore over initialState when snapshot is provided', () => {
+    const workflow: Workflow<void, SnapshotState, never, SnapshotRendering> = {
+      initialState: () => ({ count: 0, name: 'initial' }),
+      restore: (snapshot) => {
+        const parsed = JSON.parse(snapshot) as SnapshotState;
+        return { count: parsed.count + 1, name: `${parsed.name}-restored` };
+      },
+      render: (_props, state) => ({
+        display: `${state.name}: ${state.count}`,
+        count: state.count,
+        name: state.name,
+      }),
+      snapshot: (state) => JSON.stringify(state),
+    };
+
+    const runtime = createRuntime(workflow, undefined, undefined, '{"count":2,"name":"base"}');
+
+    expect(runtime.getState()).toEqual({ count: 3, name: 'base-restored' });
+    expect(runtime.getRendering().display).toBe('base-restored: 3');
+
+    runtime.dispose();
+  });
+
   it('should use jsonSnapshot utility', () => {
     const { snapshot, restore } = jsonSnapshot<{ count: number }>();
     

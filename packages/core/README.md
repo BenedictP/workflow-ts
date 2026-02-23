@@ -36,7 +36,7 @@ interface Workflow<P, S, O, R> {
 - `O` - Output (events to parent, or `never` if none)
 - `R` - Rendering (external representation)
 
-### `createRuntime(workflow, props, onOutput?)`
+### `createRuntime(workflow, props, onOutput?, snapshot?)`
 
 Create a runtime to execute a workflow.
 
@@ -46,6 +46,14 @@ import { createRuntime } from '@workflow-ts/core';
 const runtime = createRuntime(workflow, props, (output) => {
   console.log('Workflow output:', output);
 });
+
+// Restore from snapshot
+const snapshot = runtime.snapshot();
+if (snapshot) {
+  const restored = createRuntime(workflow, props, undefined, snapshot);
+  restored.getRendering();
+  restored.dispose();
+}
 
 // Get current rendering
 const rendering = runtime.getRendering();

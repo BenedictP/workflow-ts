@@ -193,10 +193,10 @@ See the [`examples/`](./examples) directory:
 
 ## Documentation
 
+- Docs site: https://aicodehelper.github.io/workflow-ts/
 - [Core API Reference](./packages/core/README.md)
 - [React Integration](./packages/react/README.md)
-- [Testing Guide](./docs/testing.md)
-- [Architecture Deep Dive](./docs/architecture.md)
+- [Guides](./docs/index.md)
 
 ## Comparison
 

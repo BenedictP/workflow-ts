@@ -18,6 +18,15 @@ pnpm docs:serve
 - `api/` - Auto-generated API reference (TypeDoc)
 - `guides/` - Usage guides and tutorials
 
+## Guides
+
+- [Overview](./guides/overview.md)
+- [Composition & Child Workflows](./guides/composition.md)
+- [Workers](./guides/workers.md)
+- [Snapshots](./guides/snapshots.md)
+- [Testing](./guides/testing.md)
+- [React Integration](./guides/react.md)
+
 ## Contributing
 
 Documentation improvements are welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md).

@@ -200,6 +200,9 @@ export function createWorker<T>(
  */
 export function fromPromise<T>(key: string, factory: () => Promise<T>): Worker<T> {
   return createWorker(key, async (signal: AbortSignal): Promise<T> => {
+    if (signal.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     const result = await factory();
     if (signal.aborted) {
       throw new DOMException('Aborted', 'AbortError');
@@ -241,6 +244,10 @@ export function fetchWorker<T>(key: string, url: string, options?: RequestInit):
  */
 export function debounceWorker<T>(key: string, worker: Worker<T>, delayMs: number): Worker<T> {
   return createWorker(key, async (signal: AbortSignal): Promise<T> => {
+    if (signal.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(resolve, delayMs);
       signal.addEventListener('abort', () => {

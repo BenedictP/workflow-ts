@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createRuntime,
   createWorker,
+  debounceWorker,
+  fromPromise,
   type Workflow,
   type Worker,
 } from '../src';
@@ -478,5 +480,27 @@ describe('AbortSignal integration', () => {
 
     // Worker should have been stopped without error
     runtime.dispose();
+  });
+
+  it('should abort fromPromise before awaiting factory when already aborted', async () => {
+    const worker = fromPromise('test', async () => {
+      throw new Error('should not run');
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(worker.run(controller.signal)).rejects.toThrow('Aborted');
+  });
+
+  it('should abort debounced worker before starting inner worker', async () => {
+    const inner = createWorker('inner', async () => 'done');
+    const debounced = debounceWorker('debounced', inner, 50);
+
+    const controller = new AbortController();
+    const promise = debounced.run(controller.signal);
+    controller.abort();
+
+    await expect(promise).rejects.toThrow('Aborted');
   });
 });

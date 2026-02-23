@@ -28,6 +28,11 @@ export class WorkerManager {
   /** Whether we're currently in a render cycle */
   private inRenderCycle = false;
 
+  /** Whether we're currently in a render cycle */
+  public get isInRenderCycle(): boolean {
+    return this.inRenderCycle;
+  }
+
   /**
    * Begin a new render cycle.
    * This resets the touched set to track which workers are used.

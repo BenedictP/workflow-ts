@@ -351,8 +351,12 @@ private renderChild<CP, CS, CO, CR>(
 export function createRuntime<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
-  onOutput?: (output: O) => void,
+  onOutputOrConfig?: ((output: O) => void) | RuntimeConfig<P, S, O, R>,
   snapshot?: string,
 ): WorkflowRuntime<P, S, O, R> {
-  return new WorkflowRuntime({ workflow, props, onOutput, snapshot });
+  if (typeof onOutputOrConfig === 'object' && onOutputOrConfig !== null) {
+    return new WorkflowRuntime({ ...onOutputOrConfig, workflow, props });
+  }
+
+  return new WorkflowRuntime({ workflow, props, onOutput: onOutputOrConfig, snapshot });
 }

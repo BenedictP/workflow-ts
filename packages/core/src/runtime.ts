@@ -41,6 +41,9 @@ export class WorkflowRuntime<P, S, O, R> {
   /** Keys of children that were used in the current render cycle */
   private readonly touchedChildren = new Set<string>();
   private disposed = false;
+  private isRendering = false;
+  private isProcessingActions = false;
+  private readonly actionQueue: Array<Action<S, O>> = [];
 
   private outputHandlers = new Map<
     string,
@@ -128,10 +131,11 @@ export class WorkflowRuntime<P, S, O, R> {
     this.disposed = true;
     this.workerManager.dispose();
     this.listeners.clear();
-    this.childRuntimes.forEach((child) => { child.dispose(); });
+    this.childRuntimes.forEach((child) => child.dispose());
     this.childRuntimes.clear();
     this.touchedChildren.clear();
     this.cachedRendering = null;
+    this.actionQueue.length = 0;
   }
 
   /**
@@ -157,11 +161,13 @@ export class WorkflowRuntime<P, S, O, R> {
     this.workerManager.beginRenderCycle();
     // Reset touched children tracking
     this.touchedChildren.clear();
+    this.isRendering = true;
 
     try {
       const context = this.createRenderContext();
       return this.config.workflow.render(this.currentProps, this.state, context);
     } finally {
+      this.isRendering = false;
       // End render cycle - stop any workers that weren't used
       this.workerManager.endRenderCycle();
 
@@ -200,6 +206,25 @@ export class WorkflowRuntime<P, S, O, R> {
   private handleAction(action: Action<S, O>): void {
     this.assertNotDisposed();
 
+    if (this.isRendering || this.isProcessingActions) {
+      this.actionQueue.push(action);
+      return;
+    }
+
+    this.isProcessingActions = true;
+
+    try {
+      this.processAction(action);
+      while (this.actionQueue.length > 0) {
+        const next = this.actionQueue.shift();
+        if (next) this.processAction(next);
+      }
+    } finally {
+      this.isProcessingActions = false;
+    }
+  }
+
+  private processAction(action: Action<S, O>): void {
     const result = action(this.state);
     this.state = result.state;
 

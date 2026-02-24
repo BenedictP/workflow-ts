@@ -320,7 +320,11 @@ private renderChild<CP, CS, CO, CR>(
     }
 
     if (typeof workflow === 'object') {
-      return JSON.stringify(workflow);
+      try {
+        return JSON.stringify(workflow);
+      } catch {
+        return Object.prototype.toString.call(workflow);
+      }
     }
 
     return String(workflow);

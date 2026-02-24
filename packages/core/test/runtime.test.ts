@@ -485,6 +485,32 @@ describe('Child workflow lifecycle', () => {
     runtime.dispose();
   });
 
+  it('should use fallback workflow key when workflow is circular', () => {
+    const workflow: Workflow<number, { value: number }, never, { value: number }> = {
+      initialState: (props) => ({ value: props }),
+      render: (_props, state) => ({ value: state.value }),
+    };
+
+    const circular = workflow as Workflow<number, { value: number }, never, { value: number }> & { self?: unknown };
+    circular.self = circular;
+
+    const parentWorkflow: Workflow<number, ParentState, never, ParentRendering> = {
+      initialState: () => ({ childOutputs: [] }),
+      render: (props, state, ctx) => {
+        const childRendering = ctx.renderChild(circular, props);
+        return {
+          childValue: childRendering.value,
+          childOutputs: state.childOutputs,
+        };
+      },
+    };
+
+    const runtime = createRuntime(parentWorkflow, 1);
+    expect(runtime.getRendering().childValue).toBe(1);
+    runtime.dispose();
+  });
+
+
   it('should handle child workflow output', () => {
     const outputs: number[] = [];
     

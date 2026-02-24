@@ -46,6 +46,8 @@ export class WorkflowRuntime<P, S, O, R> {
     string,
     ((output: unknown) => void) | undefined
   >();
+  private readonly workflowKeyMap = new WeakMap<object, string>();
+  private workflowKeyCounter = 0;
 
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
     const restoredState =
@@ -118,34 +120,28 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   /**
-   * Get a snapshot of the current state.
+   * Dispose the runtime and stop all workers.
+   */
+  public dispose(): void {
+    if (this.disposed) return;
+
+    this.disposed = true;
+    this.workerManager.dispose();
+    this.listeners.clear();
+    this.childRuntimes.forEach((child) => child.dispose());
+    this.childRuntimes.clear();
+    this.touchedChildren.clear();
+    this.cachedRendering = null;
+  }
+
+  /**
+   * Snapshot the current state, if supported.
    */
   public snapshot(): string | undefined {
     if (this.config.workflow.snapshot !== undefined) {
       return this.config.workflow.snapshot(this.state);
     }
     return undefined;
-  }
-
-  /**
-   * Dispose of this runtime and all children.
-   */
-  public dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-
-    this.workerManager.stopAll();
-    this.childRuntimes.forEach((child) => { child.dispose(); });
-    this.childRuntimes.clear();
-    this.outputHandlers.clear();
-    this.listeners.clear();
-  }
-
-  /**
-   * Check if the runtime has been disposed.
-   */
-  public isDisposed(): boolean {
-    return this.disposed;
   }
 
   // ============================================================
@@ -227,7 +223,7 @@ export class WorkflowRuntime<P, S, O, R> {
     return this.outputHandlers.get(key);
   }
 
-private renderChild<CP, CS, CO, CR>(
+  private renderChild<CP, CS, CO, CR>(
     workflow: Workflow<CP, CS, CO, CR>,
     props: CP,
     key: string | undefined,
@@ -320,11 +316,11 @@ private renderChild<CP, CS, CO, CR>(
     }
 
     if (typeof workflow === 'object') {
-      try {
-        return JSON.stringify(workflow);
-      } catch {
-        return Object.prototype.toString.call(workflow);
-      }
+      const existing = this.workflowKeyMap.get(workflow as object);
+      if (existing !== undefined) return existing;
+      const next = `workflow-${this.workflowKeyCounter++}`;
+      this.workflowKeyMap.set(workflow as object, next);
+      return next;
     }
 
     return String(workflow);
@@ -337,6 +333,11 @@ private renderChild<CP, CS, CO, CR>(
 
 /**
  * Create a workflow runtime.
+ *
+ * @param workflow - Workflow definition
+ * @param props - Initial props
+ * @param onOutput - Optional output handler
+ * @returns New workflow runtime
  *
  * @example
  * ```typescript

@@ -36,8 +36,7 @@ export function useWorkflow<P, S, O, R>(
   const onOutputRef = useRef(onOutput);
   onOutputRef.current = onOutput;
 
-  const resetOnWorkflowChange = options?.resetOnWorkflowChange === true;
-  const runtimeKey = resetOnWorkflowChange ? workflow : 'static-runtime';
+  const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
     return createRuntime(workflow, props, (output: O) => {
       onOutputRef.current?.(output);
@@ -118,8 +117,7 @@ export function useWorkflowWithState<P, S, O, R>(
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
 
-  const resetOnWorkflowChange = options.resetOnWorkflowChange === true;
-  const runtimeKey = resetOnWorkflowChange ? workflow : 'static-runtime';
+  const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
     return createRuntime(workflow, options.props, (output: O) => {
       onOutputRef.current?.(output);

@@ -43,7 +43,7 @@ export class WorkflowRuntime<P, S, O, R> {
   private disposed = false;
   private isRendering = false;
   private isProcessingActions = false;
-  private readonly actionQueue: Array<Action<S, O>> = [];
+  private readonly actionQueue: Action<S, O>[] = [];
 
   private outputHandlers = new Map<
     string,
@@ -131,7 +131,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.disposed = true;
     this.workerManager.dispose();
     this.listeners.clear();
-    this.childRuntimes.forEach((child) => child.dispose());
+    this.childRuntimes.forEach((child) => { child.dispose(); });
     this.childRuntimes.clear();
     this.touchedChildren.clear();
     this.cachedRendering = null;

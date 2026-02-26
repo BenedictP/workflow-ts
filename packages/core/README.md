@@ -36,25 +36,44 @@ interface Workflow<P, S, O, R> {
 - `O` - Output (events to parent, or `never` if none)
 - `R` - Rendering (external representation)
 
-### `createRuntime(workflow, props, onOutput?, snapshot?)`
+### `createRuntime(workflow, props, config?)`
 
 Create a runtime to execute a workflow.
 
 ```typescript
 import { createRuntime } from '@workflow-ts/core';
 
-const runtime = createRuntime(workflow, props, (output) => {
-  console.log('Workflow output:', output);
+// Simple usage
+const runtime = createRuntime(workflow, props);
+
+// With output handler
+const runtime = createRuntime(workflow, props, {
+  onOutput: (output) => console.log('Output:', output)
 });
 
-// Restore from snapshot
-const snapshot = runtime.snapshot();
-if (snapshot) {
-  const restored = createRuntime(workflow, props, undefined, snapshot);
-  restored.getRendering();
-  restored.dispose();
-}
+// With full config (snapshot restoration)
+const runtime = createRuntime(workflow, props, {
+  onOutput: (output) => console.log('Output:', output),
+  initialState: { count: 5 },
+  snapshot: savedSnapshot  // previously saved via runtime.snapshot()
+});
 
+// Legacy: still supports callback as third argument (backwards compatible)
+const runtime = createRuntime(workflow, props, (output) => {
+  console.log('Output:', output);
+});
+```
+
+**Parameters:**
+- `workflow` - Workflow definition
+- `props` - Initial props
+- `config?` - Optional configuration object or output callback:
+  - `onOutput?: (output: O) => void` - Callback for workflow outputs
+  - `initialState?: S` - Initial state (for testing)
+  - `snapshot?: string` - Restore state from serialized snapshot
+```
+
+```typescript
 // Get current rendering
 const rendering = runtime.getRendering();
 

@@ -354,7 +354,12 @@ export class WorkflowRuntime<P, S, O, R> {
 export function createRuntime<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
-  config?: Partial<RuntimeConfig<P, S, O, R>>,
+  configOrOnOutput?: Partial<RuntimeConfig<P, S, O, R>> | ((output: O) => void),
 ): WorkflowRuntime<P, S, O, R> {
+  // Handle backwards compatibility: if configOrOnOutput is a function, treat it as onOutput
+  const config: Partial<RuntimeConfig<P, S, O, R>> =
+    typeof configOrOnOutput === 'function'
+      ? { onOutput: configOrOnOutput }
+      : (configOrOnOutput ?? {});
   return new WorkflowRuntime({ ...config, workflow, props });
 }

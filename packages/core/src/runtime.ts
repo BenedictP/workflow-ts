@@ -354,7 +354,7 @@ export class WorkflowRuntime<P, S, O, R> {
 export function createRuntime<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
-  config?: RuntimeConfig<P, S, O, R>,
+  config?: Partial<RuntimeConfig<P, S, O, R>>,
 ): WorkflowRuntime<P, S, O, R> {
   return new WorkflowRuntime({ ...config, workflow, props });
 }

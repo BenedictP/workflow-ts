@@ -128,7 +128,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.disposed = true;
     this.workerManager.dispose();
     this.listeners.clear();
-    this.childRuntimes.forEach((child) => child.dispose());
+    this.childRuntimes.forEach((child) => { child.dispose(); });
     this.childRuntimes.clear();
     this.touchedChildren.clear();
     this.cachedRendering = null;
@@ -142,6 +142,10 @@ export class WorkflowRuntime<P, S, O, R> {
       return this.config.workflow.snapshot(this.state);
     }
     return undefined;
+  }
+
+  public isDisposed(): boolean {
+    return this.disposed;
   }
 
   // ============================================================

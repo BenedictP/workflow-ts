@@ -333,12 +333,14 @@ export class WorkflowRuntime<P, S, O, R> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getWorkflowKey(workflow: Workflow<any, any, any, any>): string {
+    // Only use constructor name for named functions/classes, not "Object" (default for object literals)
     const constructor = (workflow as object).constructor as { name?: string } | undefined;
     const name = constructor?.name ?? '';
-    if (name.length > 0) {
+    if (name.length > 0 && name !== 'Object') {
       return name;
     }
 
+    // Use WeakMap for object identity (works for both object literals and class instances)
     if (typeof workflow === 'object') {
       const existing = this.workflowKeyMap.get(workflow as object);
       if (existing !== undefined) return existing;

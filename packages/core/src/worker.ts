@@ -7,13 +7,20 @@ import type { Worker } from './types';
 /**
  * Internal state for tracking a running worker.
  */
-interface WorkerState {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface WorkerState<T = any> {
   /** AbortController for cancelling the worker */
   readonly controller: AbortController;
   /** Current status of the worker */
   status: 'running' | 'stopped' | 'completed';
   /** Whether this worker was used in the current render cycle */
   touched: boolean;
+  /** The worker function */
+  worker: Worker<T>;
+  /** Output handler */
+  onOutput: (output: T) => void;
+  /** Completion handler */
+  onComplete: () => void;
 }
 
 /**
@@ -63,6 +70,8 @@ export class WorkerManager {
   /**
    * Start a worker if not already running.
    * During a render cycle, marks the worker as touched.
+   * If worker with same key is already running, keeps it alive (no restart).
+   * To restart with new worker, stopWorker must be called first.
    *
    * @param worker - The worker to start
    * @param key - Unique key for this worker
@@ -80,16 +89,24 @@ export class WorkerManager {
       this.touchedKeys.add(key);
     }
 
-    // Already running - keep it alive
-    if (this.activeWorkers.has(key)) {
+    // Already running - keep it alive, don't restart
+    // (handler changes will be picked up on next render after worker completes)
+    const existing = this.activeWorkers.get(key);
+    if (existing !== undefined) {
+      // Update handlers for when worker next produces output
+      existing.onOutput = onOutput;
+      existing.onComplete = onComplete;
       return;
     }
 
     const controller = new AbortController();
-    const state: WorkerState = {
+    const state: WorkerState<T> = {
       controller,
       status: 'running',
       touched: true,
+      worker,
+      onOutput,
+      onComplete,
     };
 
     this.activeWorkers.set(key, state);
@@ -98,7 +115,7 @@ export class WorkerManager {
       .run(controller.signal)
       .then((output: T) => {
         if (state.status === 'running') {
-          onOutput(output);
+          state.onOutput(output);
         }
       })
       .catch((error: unknown) => {
@@ -112,7 +129,7 @@ export class WorkerManager {
         if (state.status === 'running') {
           state.status = 'completed';
           this.activeWorkers.delete(key);
-          onComplete();
+          state.onComplete();
         }
       });
   }

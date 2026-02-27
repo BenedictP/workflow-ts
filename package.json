@@ -1,6 +1,6 @@
 {
-  "name": "workflow-ts-monorepo",
-  "version": "0.0.1",
+  "name": "workflow-ts",
+  "version": "0.0.2",
   "private": true,
   "description": "A TypeScript implementation of Square's Workflow architecture",
   "keywords": [
@@ -10,12 +10,21 @@
     "reactive",
     "typescript"
   ],
-  "author": "",
+  "homepage": "https://github.com/AICodeHelper/workflow-ts#readme",
+  "bugs": {
+    "url": "https://github.com/AICodeHelper/workflow-ts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AICodeHelper/workflow-ts.git"
+  },
   "license": "MIT",
+  "author": "",
   "type": "module",
-  "packageManager": "pnpm@9.0.0",
-  "engines": {
-    "node": ">=18.0.0"
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
   },
   "scripts": {
     "build": "pnpm -r build",
@@ -43,5 +52,9 @@
     "typedoc": "^0.28.17",
     "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.3.3"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
 }

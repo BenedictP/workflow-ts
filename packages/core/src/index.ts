@@ -20,7 +20,13 @@ export type {
 } from './types';
 
 // Runtime
-export { WorkflowRuntime, createRuntime, type RuntimeConfig } from './runtime';
+export {
+  WorkflowRuntime,
+  createRuntime,
+  type RuntimeConfig,
+  type DebugLogger,
+  type LogLevel,
+} from './runtime';
 
 // Actions
 export { action, compose, emit, named, noChange } from './action';

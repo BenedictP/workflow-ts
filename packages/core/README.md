@@ -55,7 +55,19 @@ const runtime = createRuntime(workflow, props, {
 const runtime = createRuntime(workflow, props, {
   onOutput: (output) => console.log('Output:', output),
   initialState: { count: 5 },
-  snapshot: savedSnapshot  // previously saved via runtime.snapshot()
+  snapshot: savedSnapshot,  // previously saved via runtime.snapshot()
+});
+
+// Enable debug logging
+const runtime = createRuntime(workflow, props, {
+  debug: true  // logs to console with [workflow-ts] prefix
+});
+
+// Or use custom logger
+const runtime = createRuntime(workflow, props, {
+  debug: (level, message, data) => {
+    console.log(`[${level}]`, message, data);
+  }
 });
 
 // Legacy: still supports callback as third argument (backwards compatible)
@@ -71,6 +83,7 @@ const runtime = createRuntime(workflow, props, (output) => {
   - `onOutput?: (output: O) => void` - Callback for workflow outputs
   - `initialState?: S` - Initial state (for testing)
   - `snapshot?: string` - Restore state from serialized snapshot
+  - `debug?: boolean | DebugLogger` - Enable debug logging
 ```
 
 ```typescript

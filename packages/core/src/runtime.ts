@@ -2,6 +2,32 @@ import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
 
 // ============================================================
+// Types
+// ============================================================
+
+/**
+ * Debug log level
+ */
+export type LogLevel = 'log' | 'warn' | 'error';
+
+/**
+ * Debug logger function
+ */
+export type DebugLogger = (level: LogLevel, message: string, data?: unknown) => void;
+
+/**
+ * Default debug logger that uses console
+ */
+const defaultLogger: DebugLogger = (level, message, data) => {
+  const prefix = '[workflow-ts]';
+  if (data !== undefined) {
+    console[level](`${prefix} ${message}`, data);
+  } else {
+    console[level](`${prefix} ${message}`);
+  }
+};
+
+// ============================================================
 // Workflow Runtime - The engine that drives workflows
 // ============================================================
 
@@ -19,6 +45,8 @@ export interface RuntimeConfig<P, S, O, R> {
   readonly initialState?: S | undefined;
   /** Optional snapshot to restore state from */
   readonly snapshot?: string | undefined;
+  /** Enable debug logging */
+  readonly debug?: boolean | DebugLogger | undefined;
 }
 
 /**
@@ -52,7 +80,18 @@ export class WorkflowRuntime<P, S, O, R> {
   private readonly workflowKeyMap = new WeakMap<object, string>();
   private workflowKeyCounter = 0;
 
+  private readonly debug: DebugLogger | null;
+
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
+    // Initialize debug logger
+    if (config.debug === true) {
+      this.debug = defaultLogger;
+    } else if (typeof config.debug === 'function') {
+      this.debug = config.debug;
+    } else {
+      this.debug = null;
+    }
+
     const restoredState =
       config.snapshot !== undefined
         ? (config.workflow.restore?.(config.snapshot) ??
@@ -61,6 +100,8 @@ export class WorkflowRuntime<P, S, O, R> {
 
     this.state = config.initialState ?? restoredState ?? config.workflow.initialState(config.props);
     this.currentProps = config.props;
+
+    this.debug?.('log', 'Runtime initialized', { initialState: this.state });
   }
 
   /**
@@ -128,10 +169,13 @@ export class WorkflowRuntime<P, S, O, R> {
   public dispose(): void {
     if (this.disposed) return;
 
+    this.debug?.('log', 'Runtime disposed');
     this.disposed = true;
     this.workerManager.dispose();
     this.listeners.clear();
-    this.childRuntimes.forEach((child) => { child.dispose(); });
+    this.childRuntimes.forEach((child) => {
+      child.dispose();
+    });
     this.childRuntimes.clear();
     this.touchedChildren.clear();
     this.cachedRendering = null;
@@ -214,6 +258,9 @@ export class WorkflowRuntime<P, S, O, R> {
         const next = this.actionQueue.shift();
         if (next) this.processAction(next);
       }
+    } catch (error) {
+      this.debug?.('error', 'Error processing action', error);
+      throw error;
     } finally {
       this.isProcessingActions = false;
     }
@@ -223,12 +270,18 @@ export class WorkflowRuntime<P, S, O, R> {
     const result = action(this.state);
     this.state = result.state;
 
+    // Debug log state change
+    this.debug?.('log', 'State updated', { newState: this.state });
+
     // Clear cached rendering
     this.cachedRendering = null;
 
     // Emit output if any
-    if (result.output !== undefined && this.config.onOutput !== undefined) {
-      this.config.onOutput(result.output);
+    if (result.output !== undefined) {
+      this.debug?.('log', 'Output emitted', { output: result.output });
+      if (this.config.onOutput !== undefined) {
+        this.config.onOutput(result.output);
+      }
     }
 
     // Notify listeners
@@ -266,6 +319,7 @@ export class WorkflowRuntime<P, S, O, R> {
     if (child === undefined) {
       if (handler !== undefined) {
         this.updateOutputHandler(childKey, (output) => {
+          this.debug?.('log', 'Child output received', { childKey, output });
           this.handleAction(handler(output as CO));
         });
       }
@@ -273,6 +327,7 @@ export class WorkflowRuntime<P, S, O, R> {
         workflow,
         props,
         onOutput: (output: CO) => {
+          this.debug?.('log', 'Child output', { childKey, output });
           this.getOutputHandler(childKey)?.(output);
         },
       });
@@ -306,10 +361,12 @@ export class WorkflowRuntime<P, S, O, R> {
       key,
       (output: W): void => {
         if (this.disposed) return;
+        this.debug?.('log', 'Worker completed', { worker: key, output });
         this.handleAction(handler(output));
       },
       (): void => {
         // Worker completed
+        this.debug?.('log', 'Worker finished', { worker: key });
       },
     );
   }
@@ -320,6 +377,7 @@ export class WorkflowRuntime<P, S, O, R> {
       try {
         listener(rendering);
       } catch (error) {
+        this.debug?.('error', 'Error in workflow listener', error);
         console.error('Error in workflow listener:', error);
       }
     });

@@ -16,7 +16,7 @@ const workflow: Workflow<Props, State, Output, Rendering> = {
 ## Restore a runtime
 
 ```ts
-const runtime = createRuntime(workflow, props, undefined, snapshotString);
+const runtime = createRuntime(workflow, props, { snapshot: snapshotString });
 ```
 
 `restore` takes precedence when provided; otherwise `initialState(props, snapshot)` is used.

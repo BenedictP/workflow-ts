@@ -123,8 +123,6 @@ export function createDevTools<S = unknown, O = unknown, R = unknown>(
   const {
     maxEvents = 1000,
     enableTimeTravel = true,
-    enableTiming: _enableTiming = true,
-    latencyThreshold: _latencyThreshold = 100,
   } = options;
 
   let enabled = true;
@@ -136,7 +134,7 @@ export function createDevTools<S = unknown, O = unknown, R = unknown>(
 
   const id = `devtools-${++devToolsIdCounter}`;
 
-  const _log = (event: Omit<DevToolsEvent<S, O, R>, 'timestamp'>) => {
+  const _log = (event: Omit<DevToolsEvent<S, O, R>, 'timestamp'>): void => {
     if (!enabled) return;
 
     const fullEvent: DevToolsEvent<S, O, R> = {

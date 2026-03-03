@@ -144,11 +144,12 @@ export function loggingInterceptor<S, O>(
   };
 
   if (logResults) {
-    config.onResult = (action, result, _ctx) => {
+    config.onResult = (action, result, _ctx): ActionResult<S, O> => {
       logger.log(`${prefix} Action completed:`, String(action));
       if (logState) {
         logger.log(`${prefix} New State:`, result.state);
       }
+      void _ctx; // reserved for future use
       return result;
     };
     config.onError = (action, error) => {

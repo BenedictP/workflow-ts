@@ -152,6 +152,43 @@ describe('useWorkflow', () => {
     // Unmount should not throw
     expect(() => { unmount(); }).not.toThrow();
   });
+
+  it('should unsubscribe old outputHandler and not double-call after rerender with new handler', () => {
+    const oldHandler = vi.fn();
+    const newHandler = vi.fn();
+
+    const { result, rerender, unmount } = renderHook(
+      ({ handler }: { handler: typeof oldHandler }) =>
+        useWorkflow(counterWorkflow, undefined, undefined, {
+          outputHandlers: { reachedZero: handler },
+        }),
+      { initialProps: { handler: oldHandler } },
+    );
+
+    // Trigger reachedZero (increment then decrement back to 0)
+    act(() => {
+      result.current.onIncrement();
+      result.current.onDecrement();
+    });
+
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).toHaveBeenCalledTimes(0);
+
+    // Swap handler
+    rerender({ handler: newHandler });
+
+    // Trigger reachedZero again
+    act(() => {
+      result.current.onIncrement();
+      result.current.onDecrement();
+    });
+
+    // Old handler must not be called again — cleanup must have run
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
 });
 
 describe('useWorkflowWithState', () => {
@@ -216,7 +253,45 @@ describe('useWorkflowWithState', () => {
     });
 
     expect(onOutput).toHaveBeenCalledWith({ type: 'reachedZero' });
-    
+
+    unmount();
+  });
+
+  it('should unsubscribe old outputHandler and not double-call after rerender with new handler', () => {
+    const oldHandler = vi.fn();
+    const newHandler = vi.fn();
+
+    const { result, rerender, unmount } = renderHook(
+      ({ handler }: { handler: typeof oldHandler }) =>
+        useWorkflowWithState(counterWorkflow, {
+          props: undefined,
+          outputHandlers: { reachedZero: handler },
+        }),
+      { initialProps: { handler: oldHandler } },
+    );
+
+    // Trigger reachedZero (increment then decrement back to 0)
+    act(() => {
+      result.current.rendering.onIncrement();
+      result.current.rendering.onDecrement();
+    });
+
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).toHaveBeenCalledTimes(0);
+
+    // Swap handler
+    rerender({ handler: newHandler });
+
+    // Trigger reachedZero again
+    act(() => {
+      result.current.rendering.onIncrement();
+      result.current.rendering.onDecrement();
+    });
+
+    // Old handler must not be called again — cleanup must have run
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).toHaveBeenCalledTimes(1);
+
     unmount();
   });
 });

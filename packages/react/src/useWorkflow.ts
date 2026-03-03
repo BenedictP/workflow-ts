@@ -26,9 +26,9 @@ export interface UseWorkflowHookOptions<O> {
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
   /** Optional handlers for specific output types */
-  outputHandlers?: Partial<{
-    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
-  }>;
+  outputHandlers?: {
+    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+  };
 }
 
 export function useWorkflow<P, S, O, R>(
@@ -39,8 +39,6 @@ export function useWorkflow<P, S, O, R>(
 ): R {
   const onOutputRef = useRef(onOutput);
   onOutputRef.current = onOutput;
-  const outputHandlersRef = useRef(options?.outputHandlers);
-  outputHandlersRef.current = options?.outputHandlers;
 
   const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
@@ -51,7 +49,7 @@ export function useWorkflow<P, S, O, R>(
 
   // Register typed output handlers with proper cleanup
   useEffect(() => {
-    const handlers = outputHandlersRef.current;
+    const handlers = options?.outputHandlers;
     if (!handlers) return;
 
     const unsubscribes: (() => void)[] = [];
@@ -93,9 +91,9 @@ export interface UseWorkflowOptions<P, O> {
   /** Callback for workflow outputs */
   onOutput?: (output: O) => void;
   /** Optional handlers for specific output types */
-  outputHandlers?: Partial<{
-    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
-  }>;
+  outputHandlers?: {
+    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+  };
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
 }
@@ -144,8 +142,6 @@ export function useWorkflowWithState<P, S, O, R>(
 ): UseWorkflowResult<P, S, R> {
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
-  const outputHandlersRef = useRef(options.outputHandlers);
-  outputHandlersRef.current = options.outputHandlers;
 
   const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
@@ -156,7 +152,7 @@ export function useWorkflowWithState<P, S, O, R>(
 
   // Register typed output handlers with proper cleanup
   useEffect(() => {
-    const handlers = outputHandlersRef.current;
+    const handlers = options.outputHandlers;
     if (!handlers) return;
 
     const unsubscribes: (() => void)[] = [];

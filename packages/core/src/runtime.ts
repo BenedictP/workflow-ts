@@ -1,4 +1,5 @@
 import type { Interceptor } from './interceptor';
+import type { DevTools, RuntimeDevTools } from './devtools';
 import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
 
@@ -52,6 +53,8 @@ export interface RuntimeConfig<P, S, O, R> {
   readonly debug?: boolean | DebugLogger | undefined;
   /** Optional interceptors for cross-cutting concerns */
   readonly interceptors?: readonly Interceptor<S, O>[] | undefined;
+  /** Optional devtools for debugging/monitoring */
+  readonly devTools?: DevTools<S, O, R> | undefined;
 }
 
 /**
@@ -88,6 +91,7 @@ export class WorkflowRuntime<P, S, O, R> {
   private workflowKeyCounter = 0;
 
   private readonly debug: DebugLogger | null;
+  private readonly devTools: RuntimeDevTools<S, O, R> | null;
 
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
     // Initialize debug logger
@@ -109,6 +113,15 @@ export class WorkflowRuntime<P, S, O, R> {
     this.currentProps = config.props;
 
     this.debug?.('log', 'Runtime initialized', { initialState: this.state });
+
+    // Initialize devtools
+    if (config.devTools !== undefined) {
+      this.devTools = config.devTools as RuntimeDevTools<S, O, R>;
+      this.devTools._setCurrentState(this.state);
+      this.devTools._log({ type: 'init', state: this.state });
+    } else {
+      this.devTools = null;
+    }
   }
 
   /**
@@ -158,6 +171,12 @@ export class WorkflowRuntime<P, S, O, R> {
     this.assertNotDisposed();
     this.currentProps = props;
     this.cachedRendering = null;
+    // DevTools: log props update
+    this.devTools?._log({
+      type: 'props:update',
+      props,
+      state: this.state,
+    });
     this.notifyListeners();
   }
 
@@ -278,9 +297,14 @@ export class WorkflowRuntime<P, S, O, R> {
     this.touchedChildren.clear();
     this.isRendering = true;
 
+    // DevTools: log render start
+    const renderStartTime = this.devTools ? performance.now() : 0;
+    this.devTools?._log({ type: 'render', state: this.state });
+
+    let rendering: R;
     try {
       const context = this.createRenderContext();
-      return this.config.workflow.render(this.currentProps, this.state, context);
+      rendering = this.config.workflow.render(this.currentProps, this.state, context);
     } finally {
       this.isRendering = false;
       // End render cycle - stop any workers that weren't used
@@ -295,6 +319,17 @@ export class WorkflowRuntime<P, S, O, R> {
       }
       this.touchedChildren.clear();
     }
+
+    // DevTools: log render complete
+    const durationMs = this.devTools ? performance.now() - renderStartTime : 0;
+    this.devTools?._log({
+      type: 'render:complete',
+      rendering,
+      state: this.state,
+      durationMs,
+    });
+
+    return rendering;
   }
 
   private createRenderContext(): RenderContext<S, O> {
@@ -347,6 +382,10 @@ export class WorkflowRuntime<P, S, O, R> {
       workflowKey: '',
     };
 
+    // DevTools: log action send
+    const startTime = this.devTools ? performance.now() : 0;
+    this.devTools?._log({ type: 'action:send', action, state: this.state });
+
     // Call onSend interceptors
     for (const interceptor of interceptors) {
       if (interceptor.config.filter?.(action) === false) continue;
@@ -373,11 +412,40 @@ export class WorkflowRuntime<P, S, O, R> {
         if (interceptor.config.filter?.(action) === false) continue;
         interceptor.config.onError?.(action, error as Error, context);
       }
+
+      // DevTools: log action error
+      this.devTools?._log({
+        type: 'action:error',
+        action,
+        state: this.state,
+        error: error as Error,
+      });
+
       throw error;
+    }
+
+    // DevTools: log action complete + state change
+    const durationMs = this.devTools ? performance.now() - startTime : 0;
+    this.devTools?._log({
+      type: 'action:complete',
+      action,
+      state: this.state,
+      durationMs,
+    });
+
+    if (result.state !== this.state) {
+      this.devTools?._log({
+        type: 'stateChange',
+        prevState: this.state,
+        newState: result.state,
+      });
     }
 
     // Update state
     this.state = result.state;
+
+    // DevTools: update current state
+    this.devTools?._setCurrentState(this.state);
 
     // Debug log state change
     this.debug?.('log', 'State updated', { newState: this.state });
@@ -388,6 +456,8 @@ export class WorkflowRuntime<P, S, O, R> {
     // Emit output if any
     if (result.output !== undefined) {
       this.debug?.('log', 'Output emitted', { output: result.output });
+      // DevTools: log output
+      this.devTools?._log({ type: 'output', output: result.output, state: this.state });
       if (this.config.onOutput !== undefined) {
         this.config.onOutput(result.output);
       }

@@ -42,3 +42,17 @@ export {
 
 // Snapshot utilities
 export { jsonSnapshot, type Snapshotable, versionedSnapshot } from './snapshot';
+
+// Interceptors
+export {
+  createInterceptor,
+  loggingInterceptor,
+  debugInterceptor,
+  composeInterceptors,
+  type Interceptor,
+  type InterceptorConfig,
+  type InterceptorContext,
+  type InterceptorLogger,
+  type LoggingInterceptorOptions,
+  type DebugInterceptorOptions,
+} from './interceptor';

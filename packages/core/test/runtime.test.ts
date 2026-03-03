@@ -1153,3 +1153,295 @@ describe('action helpers', () => {
     expect(result.state).toEqual({ count: 1 });
   });
 });
+
+// ============================================================
+// Interceptor Tests
+// ============================================================
+
+import {
+  createInterceptor,
+  loggingInterceptor,
+  debugInterceptor,
+  composeInterceptors,
+} from '../src/interceptor';
+
+describe('Interceptors', () => {
+  describe('createInterceptor', () => {
+    it('should create interceptor with name and config', () => {
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
+        onSend: () => {},
+      });
+
+      expect(interceptor.name).toBe('test');
+      expect(interceptor.config.name).toBe('test');
+      expect(interceptor.config.onSend).toBeDefined();
+    });
+
+    it('should allow filter function', () => {
+      const interceptor = createInterceptor<{ count: number }, unknown>('filtered', {
+        filter: (act) => act.toString().includes('increment'),
+      });
+
+      expect(interceptor.config.filter).toBeDefined();
+    });
+  });
+
+  describe('loggingInterceptor', () => {
+    it('should create logging interceptor', () => {
+      const interceptor = loggingInterceptor<{ count: number }, unknown>();
+
+      expect(interceptor.name).toBe('logging');
+      expect(interceptor.config.onSend).toBeDefined();
+    });
+
+    it('should respect logResults option', () => {
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({ logResults: false });
+
+      expect(interceptor.config.onResult).toBeUndefined();
+    });
+
+    it('should respect logState option', () => {
+      const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
+        logger: mockLogger,
+        logState: true,
+      });
+
+      interceptor.config.onSend?.(
+        () => ({ state: { count: 1 } }),
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(mockLogger.log).toHaveBeenCalled();
+    });
+
+    it('should respect custom prefix', () => {
+      const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
+        logger: mockLogger,
+        prefix: '[custom]',
+      });
+
+      interceptor.config.onSend?.(
+        () => ({ state: { count: 1 } }),
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(mockLogger.log).toHaveBeenCalledWith('[custom] Action:', expect.any(String));
+    });
+  });
+
+  describe('debugInterceptor', () => {
+    it('should create debug interceptor', () => {
+      const interceptor = debugInterceptor<{ count: number }, unknown>();
+
+      expect(interceptor.name).toBe('debug');
+      expect(interceptor.config.filter).toBeDefined();
+    });
+
+    it('should respect enabled option', () => {
+      const disabled = debugInterceptor<{ count: number }, unknown>({ enabled: false });
+      const enabled = debugInterceptor<{ count: number }, unknown>({ enabled: true });
+
+      expect(disabled.config.filter?.({} as any)).toBe(false);
+      expect(enabled.config.filter?.({} as any)).toBe(true);
+    });
+
+    it('should respect logSend option', () => {
+      const interceptor = debugInterceptor<{ count: number }, unknown>({ logSend: false });
+
+      expect(interceptor.config.onSend).toBeUndefined();
+    });
+
+    it('should respect logResults option', () => {
+      const interceptor = debugInterceptor<{ count: number }, unknown>({ logResults: false });
+
+      expect(interceptor.config.onResult).toBeUndefined();
+    });
+  });
+
+  describe('composeInterceptors', () => {
+    it('should compose multiple interceptors', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        onSend: () => calls.push('int1-send'),
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onSend: () => calls.push('int2-send'),
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onSend?.(
+        () => ({ state: { count: 1 } }),
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(calls).toEqual(['int1-send', 'int2-send']);
+    });
+
+    it('should call onResult in sequence and allow modification', () => {
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        onResult: (_action, result) => {
+          result.state = { count: result.state.count + 10 };
+          return result;
+        },
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onResult: (_action, result) => {
+          result.state = { count: result.state.count + 5 };
+          return result;
+        },
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      const result = composed.config.onResult?.(
+        () => ({ state: { count: 1 } }),
+        { state: { count: 1 }, output: undefined },
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(result?.state.count).toBe(16); // 1 + 10 + 5
+    });
+
+    it('should respect filter in composed interceptors', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        filter: () => false,
+        onSend: () => calls.push('int1-send'),
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onSend: () => calls.push('int2-send'),
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onSend?.(
+        () => ({ state: { count: 1 } }),
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(calls).toEqual(['int2-send']);
+    });
+
+    it('should call onError for all interceptors', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        onError: () => calls.push('int1-error'),
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onError: () => calls.push('int2-error'),
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onError?.(
+        () => ({ state: { count: 1 } }),
+        new Error('test'),
+        { state: { count: 0 }, props: {}, workflowKey: '' }
+      );
+
+      expect(calls).toEqual(['int1-error', 'int2-error']);
+    });
+  });
+
+  describe('Runtime with interceptors', () => {
+    it('should call onSend interceptor', () => {
+      const calls: string[] = [];
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
+        onSend: () => calls.push('onSend'),
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(calls).toContain('onSend');
+      runtime.dispose();
+    });
+
+    it('should call onResult interceptor', () => {
+      const calls: { count: number }[] = [];
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
+        onResult: (_action, result) => {
+          calls.push(result.state);
+          return result;
+        },
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 5 } }));
+
+      expect(calls).toEqual([{ count: 5 }]);
+      runtime.dispose();
+    });
+
+    it('should allow interceptor to modify result', () => {
+      const interceptor = createInterceptor<{ count: number }, unknown>('modifier', {
+        onResult: (_action, result) => {
+          result.state = { count: result.state.count * 2 };
+          return result;
+        },
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 3 } }));
+
+      // Original action adds 3, but interceptor doubles it
+      expect(runtime.getState()).toEqual({ count: 6 });
+      runtime.dispose();
+    });
+
+    it('should call onError interceptor when action throws', () => {
+      const calls: string[] = [];
+      const interceptor = createInterceptor<{ count: number }, unknown>('error-test', {
+        onError: () => calls.push('onError'),
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+
+      expect(() => {
+        runtime.send(() => {
+          throw new Error('test error');
+        });
+      }).toThrow();
+
+      expect(calls).toContain('onError');
+      runtime.dispose();
+    });
+
+    it('should call multiple interceptors in order', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('first', {
+        onSend: () => calls.push('first'),
+        onResult: (_action, result) => {
+          calls.push('first-result');
+          return result;
+        },
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('second', {
+        onSend: () => calls.push('second'),
+        onResult: (_action, result) => {
+          calls.push('second-result');
+          return result;
+        },
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [int1, int2] });
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(calls).toEqual(['first', 'second', 'first-result', 'second-result']);
+      runtime.dispose();
+    });
+
+    it('should work with loggingInterceptor', () => {
+      const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
+        logger: mockLogger,
+        logResults: false,
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(mockLogger.log).toHaveBeenCalled();
+      runtime.dispose();
+    });
+  });
+});

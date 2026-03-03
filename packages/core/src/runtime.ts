@@ -1,3 +1,4 @@
+import type { Interceptor } from './interceptor';
 import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
 
@@ -49,6 +50,8 @@ export interface RuntimeConfig<P, S, O, R> {
   readonly snapshot?: string | undefined;
   /** Enable debug logging */
   readonly debug?: boolean | DebugLogger | undefined;
+  /** Optional interceptors for cross-cutting concerns */
+  readonly interceptors?: readonly Interceptor<S, O>[] | undefined;
 }
 
 /**
@@ -335,7 +338,45 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   private processAction(action: Action<S, O>): void {
-    const result = action(this.state);
+    const interceptors = this.config.interceptors ?? [];
+
+    // Build context for interceptors
+    const context = {
+      state: this.state,
+      props: this.currentProps,
+      workflowKey: '',
+    };
+
+    // Call onSend interceptors
+    for (const interceptor of interceptors) {
+      if (interceptor.config.filter?.(action) === false) continue;
+      interceptor.config.onSend?.(action, context);
+    }
+
+    let result: import('./types').ActionResult<S, O>;
+
+    try {
+      // Execute action
+      result = action(this.state);
+
+      // Call onResult interceptors (can modify result)
+      for (const interceptor of interceptors) {
+        if (interceptor.config.filter?.(action) === false) continue;
+        const override = interceptor.config.onResult?.(action, result, context);
+        if (override !== undefined) {
+          result = override;
+        }
+      }
+    } catch (error) {
+      // Call onError interceptors
+      for (const interceptor of interceptors) {
+        if (interceptor.config.filter?.(action) === false) continue;
+        interceptor.config.onError?.(action, error as Error, context);
+      }
+      throw error;
+    }
+
+    // Update state
     this.state = result.state;
 
     // Debug log state change

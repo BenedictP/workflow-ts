@@ -79,6 +79,8 @@ export class WorkflowRuntime<P, S, O, R> {
     string,
     ((output: unknown) => void) | undefined
   >();
+  /** Type-safe output handlers for specific output types */
+  private readonly typedOutputHandlers = new Map<string, Set<(output: unknown) => void>>();
   private readonly workflowKeyMap = new WeakMap<object, string>();
   private workflowKeyCounter = 0;
 
@@ -182,6 +184,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.touchedChildren.clear();
     this.cachedRendering = null;
     this.actionQueue.length = 0;
+    this.typedOutputHandlers.clear();
   }
 
   /**
@@ -196,6 +199,69 @@ export class WorkflowRuntime<P, S, O, R> {
 
   public isDisposed(): boolean {
     return this.disposed;
+  }
+
+  /**
+   * Subscribe to a specific output type.
+   * Only called when the output's type matches the given type.
+   *
+   * @param type - The output type to listen for
+   * @param handler - Callback when this output type is emitted
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * // For output type: { type: 'loaded'; data: string } | { type: 'error'; error: string }
+   * runtime.on('loaded', (output) => {
+   *   console.log('Loaded:', output.data);
+   * });
+   * runtime.on('error', (output) => {
+   *   console.log('Error:', output.error);
+   * });
+   * ```
+   */
+  public on<K extends string>(
+    type: K,
+    handler: (output: O extends { type: K } ? O : never) => void,
+  ): () => void {
+    this.assertNotDisposed();
+
+    const key = `typed:${type}`;
+    let handlers = this.typedOutputHandlers.get(key);
+    if (handlers === undefined) {
+      handlers = new Set();
+      this.typedOutputHandlers.set(key, handlers);
+    }
+
+    const wrappedHandler = handler as (output: unknown) => void;
+    handlers.add(wrappedHandler);
+
+    return () => {
+      handlers?.delete(wrappedHandler);
+    };
+  }
+
+  /**
+   * Unsubscribe from a specific output type.
+   *
+   * @param type - The output type to stop listening for
+   * @param handler - Optional specific handler to remove
+   */
+  public off<K extends string>(
+    type: K,
+    handler?: (output: O extends { type: K } ? O : never) => void,
+  ): void {
+    const key = `typed:${type}`;
+    const handlers = this.typedOutputHandlers.get(key);
+
+    if (handlers === undefined) return;
+
+    if (handler === undefined) {
+      // Remove all handlers for this type
+      handlers.clear();
+    } else {
+      handlers.delete(handler as (output: unknown) => void);
+    }
   }
 
   // ============================================================
@@ -284,6 +350,8 @@ export class WorkflowRuntime<P, S, O, R> {
       if (this.config.onOutput !== undefined) {
         this.config.onOutput(result.output);
       }
+      // Call typed output handlers
+      this.emitTypedOutput(result.output);
     }
 
     // Notify listeners
@@ -300,6 +368,25 @@ export class WorkflowRuntime<P, S, O, R> {
 
   private getOutputHandler(key: string): ((output: unknown) => void) | undefined {
     return this.outputHandlers.get(key);
+  }
+
+  private emitTypedOutput(output: O): void {
+    // Get the type from the output if it has a type property
+    const outputType = (output as { type?: string }).type;
+    if (outputType === undefined) return;
+
+    const key = `typed:${outputType}`;
+    const handlers = this.typedOutputHandlers.get(key);
+    if (handlers === undefined || handlers.size === 0) return;
+
+    handlers.forEach((handler) => {
+      try {
+        handler(output);
+      } catch (error) {
+        this.debug?.('error', 'Error in output handler', error);
+        console.error('Error in output handler:', error);
+      }
+    });
   }
 
   private renderChild<CP, CS, CO, CR>(

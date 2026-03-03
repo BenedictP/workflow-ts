@@ -25,6 +25,10 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 export interface UseWorkflowHookOptions {
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
+  /** Optional handlers for specific output types */
+  outputHandlers?: Partial<{
+    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
+  }>;
 }
 
 export function useWorkflow<P, S, O, R>(
@@ -35,12 +39,26 @@ export function useWorkflow<P, S, O, R>(
 ): R {
   const onOutputRef = useRef(onOutput);
   onOutputRef.current = onOutput;
+  const outputHandlersRef = useRef(options?.outputHandlers);
+  outputHandlersRef.current = options?.outputHandlers;
 
   const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    return createRuntime(workflow, props, { onOutput: (output: O) => {
+    const rt = createRuntime(workflow, props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }});
+
+    // Register typed output handlers
+    const handlers = outputHandlersRef.current;
+    if (handlers) {
+      Object.entries(handlers).forEach(([type, handler]) => {
+        if (handler) {
+          rt.on(type as any, handler as any);
+        }
+      });
+    }
+
+    return rt;
   }, [runtimeKey]);
 
   // Dispose on unmount
@@ -68,6 +86,10 @@ export interface UseWorkflowOptions<P, O> {
   props: P;
   /** Callback for workflow outputs */
   onOutput?: (output: O) => void;
+  /** Optional handlers for specific output types */
+  outputHandlers?: Partial<{
+    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
+  }>;
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
 }
@@ -116,12 +138,26 @@ export function useWorkflowWithState<P, S, O, R>(
 ): UseWorkflowResult<P, S, R> {
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
+  const outputHandlersRef = useRef(options.outputHandlers);
+  outputHandlersRef.current = options.outputHandlers;
 
   const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    return createRuntime(workflow, options.props, { onOutput: (output: O) => {
+    const rt = createRuntime(workflow, options.props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }});
+
+    // Register typed output handlers
+    const handlers = outputHandlersRef.current;
+    if (handlers) {
+      Object.entries(handlers).forEach(([type, handler]) => {
+        if (handler) {
+          rt.on(type as any, handler as any);
+        }
+      });
+    }
+
+    return rt;
   }, [runtimeKey]);
 
   // Dispose on unmount

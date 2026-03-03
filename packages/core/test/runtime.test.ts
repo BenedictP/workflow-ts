@@ -818,6 +818,218 @@ describe('Disposal cleanup', () => {
 // ============================================================
 // Worker Integration Tests
 // ============================================================
+// Output Type Subscription Tests
+// ============================================================
+
+type TestOutput =
+  | { type: 'loaded'; data: string }
+  | { type: 'error'; error: string }
+  | { type: 'progress'; percent: number };
+
+interface OutputTestState {
+  readonly outputEmitted: TestOutput | null;
+}
+
+interface OutputTestRendering {
+  readonly outputEmitted: TestOutput | null;
+  readonly emitLoaded: () => void;
+  readonly emitError: () => void;
+  readonly emitProgress: () => void;
+}
+
+const outputTestWorkflow: Workflow<
+  void,
+  OutputTestState,
+  TestOutput,
+  OutputTestRendering
+> = {
+  initialState: () => ({ outputEmitted: null }),
+  render: (_props, state, ctx) => ({
+    outputEmitted: state.outputEmitted,
+    emitLoaded: () => {
+      ctx.actionSink.send(() => ({
+        state: { outputEmitted: { type: 'loaded', data: 'test-data' } },
+        output: { type: 'loaded', data: 'test-data' } as TestOutput,
+      }));
+    },
+    emitError: () => {
+      ctx.actionSink.send(() => ({
+        state: { outputEmitted: { type: 'error', error: 'test-error' } },
+        output: { type: 'error', error: 'test-error' } as TestOutput,
+      }));
+    },
+    emitProgress: () => {
+      ctx.actionSink.send(() => ({
+        state: { outputEmitted: { type: 'progress', percent: 50 } },
+        output: { type: 'progress', percent: 50 } as TestOutput,
+      }));
+    },
+  }),
+};
+
+describe('Output type subscription', () => {
+  it('should subscribe to specific output type', () => {
+    const runtime = createRuntime(outputTestWorkflow, undefined);
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+
+    const unsubscribe = runtime.on('loaded', (output) => {
+      loadedOutputs.push(output);
+    });
+
+    // Trigger output
+    runtime.getRendering().emitLoaded();
+
+    expect(loadedOutputs).toHaveLength(1);
+    expect(loadedOutputs[0]).toEqual({ type: 'loaded', data: 'test-data' });
+
+    unsubscribe();
+    runtime.dispose();
+  });
+
+  it('should subscribe to multiple output types', () => {
+    const runtime = createRuntime(outputTestWorkflow, undefined);
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+    const errorOutputs: { type: 'error'; error: string }[] = [];
+
+    runtime.on('loaded', (output) => {
+      loadedOutputs.push(output);
+    });
+    runtime.on('error', (output) => {
+      errorOutputs.push(output);
+    });
+
+    runtime.getRendering().emitLoaded();
+    runtime.getRendering().emitError();
+    runtime.getRendering().emitProgress();
+
+    expect(loadedOutputs).toHaveLength(1);
+    expect(errorOutputs).toHaveLength(1);
+    // Progress should not trigger loaded or error handlers
+    expect(loadedOutputs[0].data).toBe('test-data');
+    expect(errorOutputs[0].error).toBe('test-error');
+
+    runtime.dispose();
+  });
+
+  it('should unsubscribe from specific output type', () => {
+    const runtime = createRuntime(outputTestWorkflow, undefined);
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+
+    const handler = (output: { type: 'loaded'; data: string }) => {
+      loadedOutputs.push(output);
+    };
+    const unsubscribe = runtime.on('loaded', handler);
+
+    runtime.getRendering().emitLoaded();
+    expect(loadedOutputs).toHaveLength(1);
+
+    unsubscribe();
+
+    runtime.getRendering().emitLoaded();
+    expect(loadedOutputs).toHaveLength(1); // Should still be 1, not 2
+
+    runtime.dispose();
+  });
+
+  it('should remove all handlers for a type with off()', () => {
+    const runtime = createRuntime(outputTestWorkflow, undefined);
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+
+    runtime.on('loaded', (output) => {
+      loadedOutputs.push(output);
+    });
+    runtime.on('loaded', (output) => {
+      loadedOutputs.push({ ...output, data: output.data + '-2' });
+    });
+
+    runtime.getRendering().emitLoaded();
+    expect(loadedOutputs).toHaveLength(2);
+
+    // Remove all handlers for 'loaded' type
+    runtime.off('loaded');
+
+    runtime.getRendering().emitLoaded();
+    expect(loadedOutputs).toHaveLength(2); // No new handlers called
+
+    runtime.dispose();
+  });
+
+  it('should call both onOutput and typed handlers', () => {
+    const allOutputs: TestOutput[] = [];
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+
+    const runtime = createRuntime(outputTestWorkflow, undefined, {
+      onOutput: (output) => {
+        allOutputs.push(output);
+      },
+    });
+
+    runtime.on('loaded', (output) => {
+      loadedOutputs.push(output);
+    });
+
+    runtime.getRendering().emitLoaded();
+
+    expect(allOutputs).toHaveLength(1);
+    expect(loadedOutputs).toHaveLength(1);
+    expect(allOutputs[0]).toEqual({ type: 'loaded', data: 'test-data' });
+    expect(loadedOutputs[0]).toEqual({ type: 'loaded', data: 'test-data' });
+
+    runtime.dispose();
+  });
+
+  it('should handle outputs without type property', () => {
+    // Workflow with non-discriminated output
+    type NoTypeOutput = string;
+    interface NoTypeState {
+      readonly value: string;
+    }
+    interface NoTypeRendering {
+      readonly emit: (value: string) => void;
+    }
+    const noTypeWorkflow: Workflow<void, NoTypeState, NoTypeOutput, NoTypeRendering> = {
+      initialState: () => ({ value: '' }),
+      render: (_props, state, ctx) => ({
+        emit: (value: string) => {
+          ctx.actionSink.send(() => ({
+            state: { value },
+            output: value,
+          }));
+        },
+      }),
+    };
+
+    const runtime = createRuntime(noTypeWorkflow, undefined);
+    const outputs: string[] = [];
+
+    // Should not throw, just not call handlers
+    runtime.on('someType' as any, () => {});
+    runtime.getRendering().emit('test');
+
+    // No error should occur
+    runtime.dispose();
+  });
+
+  it('should clear typed handlers on dispose', () => {
+    const runtime = createRuntime(outputTestWorkflow, undefined);
+    const loadedOutputs: { type: 'loaded'; data: string }[] = [];
+
+    runtime.on('loaded', (output) => {
+      loadedOutputs.push(output);
+    });
+
+    runtime.dispose();
+
+    // After dispose, handlers should be cleared
+    // Creating new runtime to verify old one is disposed
+    const runtime2 = createRuntime(outputTestWorkflow, undefined);
+    runtime2.getRendering().emitLoaded();
+    expect(loadedOutputs).toHaveLength(0); // No outputs from new runtime
+    runtime2.dispose();
+  });
+});
+
+// ============================================================
 
 describe('Worker integration', () => {
   beforeEach(() => {

@@ -26,9 +26,9 @@ export interface UseWorkflowHookOptions<O> {
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
   /** Optional handlers for specific output types */
-  outputHandlers?: Partial<{
-    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
-  }>;
+  outputHandlers?: {
+    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+  };
 }
 
 export function useWorkflow<P, S, O, R>(
@@ -39,27 +39,31 @@ export function useWorkflow<P, S, O, R>(
 ): R {
   const onOutputRef = useRef(onOutput);
   onOutputRef.current = onOutput;
-  const outputHandlersRef = useRef(options?.outputHandlers);
-  outputHandlersRef.current = options?.outputHandlers;
 
   const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    const rt = createRuntime(workflow, props, { onOutput: (output: O) => {
+    return createRuntime(workflow, props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }}) as any;
-
-    // Register typed output handlers
-    const handlers = outputHandlersRef.current;
-    if (handlers) {
-      Object.entries(handlers).forEach(([type, handler]) => {
-        if (handler) {
-          rt.on(type as any, handler as any);
-        }
-      });
-    }
-
-    return rt;
   }, [runtimeKey]);
+
+  // Register typed output handlers with proper cleanup
+  useEffect(() => {
+    const handlers = options?.outputHandlers;
+    if (!handlers) return;
+
+    const unsubscribes: (() => void)[] = [];
+    Object.entries(handlers).forEach(([type, handler]) => {
+      if (handler) {
+        const unsubscribe = runtime.on(type as any, handler as any) as () => void;
+        unsubscribes.push(unsubscribe);
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [runtime, options?.outputHandlers]);
 
   // Dispose on unmount
   useEffect(() => {
@@ -87,9 +91,9 @@ export interface UseWorkflowOptions<P, O> {
   /** Callback for workflow outputs */
   onOutput?: (output: O) => void;
   /** Optional handlers for specific output types */
-  outputHandlers?: Partial<{
-    [K in keyof O]: O[K] extends { type: string } ? (output: O[K]) => void : never;
-  }>;
+  outputHandlers?: {
+    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+  };
   /** Reset runtime when workflow identity changes (opt-in) */
   resetOnWorkflowChange?: boolean;
 }
@@ -138,27 +142,31 @@ export function useWorkflowWithState<P, S, O, R>(
 ): UseWorkflowResult<P, S, R> {
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
-  const outputHandlersRef = useRef(options.outputHandlers);
-  outputHandlersRef.current = options.outputHandlers;
 
   const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    const rt = createRuntime(workflow, options.props, { onOutput: (output: O) => {
+    return createRuntime(workflow, options.props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }}) as any;
-
-    // Register typed output handlers
-    const handlers = outputHandlersRef.current;
-    if (handlers) {
-      Object.entries(handlers).forEach(([type, handler]) => {
-        if (handler) {
-          rt.on(type as any, handler as any);
-        }
-      });
-    }
-
-    return rt;
   }, [runtimeKey]);
+
+  // Register typed output handlers with proper cleanup
+  useEffect(() => {
+    const handlers = options.outputHandlers;
+    if (!handlers) return;
+
+    const unsubscribes: (() => void)[] = [];
+    Object.entries(handlers).forEach(([type, handler]) => {
+      if (handler) {
+        const unsubscribe = runtime.on(type as any, handler as any) as () => void;
+        unsubscribes.push(unsubscribe);
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [runtime, options.outputHandlers]);
 
   // Dispose on unmount
   useEffect(() => {

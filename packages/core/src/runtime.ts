@@ -1,6 +1,6 @@
+import type { Interceptor } from './interceptor';
 import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
-import type { Interceptor } from './interceptor';
 
 // ============================================================
 // Types

@@ -1168,7 +1168,7 @@ import {
 describe('Interceptors', () => {
   describe('createInterceptor', () => {
     it('should create interceptor with name and config', () => {
-      const interceptor = createInterceptor<{ count: number }, void>('test', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
         onSend: () => {},
       });
 
@@ -1178,7 +1178,7 @@ describe('Interceptors', () => {
     });
 
     it('should allow filter function', () => {
-      const interceptor = createInterceptor<{ count: number }, void>('filtered', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('filtered', {
         filter: (act) => act.toString().includes('increment'),
       });
 
@@ -1188,21 +1188,21 @@ describe('Interceptors', () => {
 
   describe('loggingInterceptor', () => {
     it('should create logging interceptor', () => {
-      const interceptor = loggingInterceptor<{ count: number }, void>();
+      const interceptor = loggingInterceptor<{ count: number }, unknown>();
 
       expect(interceptor.name).toBe('logging');
       expect(interceptor.config.onSend).toBeDefined();
     });
 
     it('should respect logResults option', () => {
-      const interceptor = loggingInterceptor<{ count: number }, void>({ logResults: false });
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({ logResults: false });
 
       expect(interceptor.config.onResult).toBeUndefined();
     });
 
     it('should respect logState option', () => {
       const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
-      const interceptor = loggingInterceptor<{ count: number }, void>({
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
         logger: mockLogger,
         logState: true,
       });
@@ -1217,7 +1217,7 @@ describe('Interceptors', () => {
 
     it('should respect custom prefix', () => {
       const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
-      const interceptor = loggingInterceptor<{ count: number }, void>({
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
         logger: mockLogger,
         prefix: '[custom]',
       });
@@ -1233,28 +1233,28 @@ describe('Interceptors', () => {
 
   describe('debugInterceptor', () => {
     it('should create debug interceptor', () => {
-      const interceptor = debugInterceptor<{ count: number }, void>();
+      const interceptor = debugInterceptor<{ count: number }, unknown>();
 
       expect(interceptor.name).toBe('debug');
       expect(interceptor.config.filter).toBeDefined();
     });
 
     it('should respect enabled option', () => {
-      const disabled = debugInterceptor<{ count: number }, void>({ enabled: false });
-      const enabled = debugInterceptor<{ count: number }, void>({ enabled: true });
+      const disabled = debugInterceptor<{ count: number }, unknown>({ enabled: false });
+      const enabled = debugInterceptor<{ count: number }, unknown>({ enabled: true });
 
       expect(disabled.config.filter?.({} as any)).toBe(false);
       expect(enabled.config.filter?.({} as any)).toBe(true);
     });
 
     it('should respect logSend option', () => {
-      const interceptor = debugInterceptor<{ count: number }, void>({ logSend: false });
+      const interceptor = debugInterceptor<{ count: number }, unknown>({ logSend: false });
 
       expect(interceptor.config.onSend).toBeUndefined();
     });
 
     it('should respect logResults option', () => {
-      const interceptor = debugInterceptor<{ count: number }, void>({ logResults: false });
+      const interceptor = debugInterceptor<{ count: number }, unknown>({ logResults: false });
 
       expect(interceptor.config.onResult).toBeUndefined();
     });
@@ -1263,10 +1263,10 @@ describe('Interceptors', () => {
   describe('composeInterceptors', () => {
     it('should compose multiple interceptors', () => {
       const calls: string[] = [];
-      const int1 = createInterceptor<{ count: number }, void>('int1', {
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
         onSend: () => calls.push('int1-send'),
       });
-      const int2 = createInterceptor<{ count: number }, void>('int2', {
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
         onSend: () => calls.push('int2-send'),
       });
 
@@ -1280,13 +1280,13 @@ describe('Interceptors', () => {
     });
 
     it('should call onResult in sequence and allow modification', () => {
-      const int1 = createInterceptor<{ count: number }, void>('int1', {
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
         onResult: (_action, result) => {
           result.state = { count: result.state.count + 10 };
           return result;
         },
       });
-      const int2 = createInterceptor<{ count: number }, void>('int2', {
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
         onResult: (_action, result) => {
           result.state = { count: result.state.count + 5 };
           return result;
@@ -1305,11 +1305,11 @@ describe('Interceptors', () => {
 
     it('should respect filter in composed interceptors', () => {
       const calls: string[] = [];
-      const int1 = createInterceptor<{ count: number }, void>('int1', {
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
         filter: () => false,
         onSend: () => calls.push('int1-send'),
       });
-      const int2 = createInterceptor<{ count: number }, void>('int2', {
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
         onSend: () => calls.push('int2-send'),
       });
 
@@ -1324,10 +1324,10 @@ describe('Interceptors', () => {
 
     it('should call onError for all interceptors', () => {
       const calls: string[] = [];
-      const int1 = createInterceptor<{ count: number }, void>('int1', {
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
         onError: () => calls.push('int1-error'),
       });
-      const int2 = createInterceptor<{ count: number }, void>('int2', {
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
         onError: () => calls.push('int2-error'),
       });
 
@@ -1345,7 +1345,7 @@ describe('Interceptors', () => {
   describe('Runtime with interceptors', () => {
     it('should call onSend interceptor', () => {
       const calls: string[] = [];
-      const interceptor = createInterceptor<{ count: number }, void>('test', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
         onSend: () => calls.push('onSend'),
       });
 
@@ -1358,7 +1358,7 @@ describe('Interceptors', () => {
 
     it('should call onResult interceptor', () => {
       const calls: { count: number }[] = [];
-      const interceptor = createInterceptor<{ count: number }, void>('test', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('test', {
         onResult: (_action, result) => {
           calls.push(result.state);
           return result;
@@ -1373,7 +1373,7 @@ describe('Interceptors', () => {
     });
 
     it('should allow interceptor to modify result', () => {
-      const interceptor = createInterceptor<{ count: number }, void>('modifier', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('modifier', {
         onResult: (_action, result) => {
           result.state = { count: result.state.count * 2 };
           return result;
@@ -1390,7 +1390,7 @@ describe('Interceptors', () => {
 
     it('should call onError interceptor when action throws', () => {
       const calls: string[] = [];
-      const interceptor = createInterceptor<{ count: number }, void>('error-test', {
+      const interceptor = createInterceptor<{ count: number }, unknown>('error-test', {
         onError: () => calls.push('onError'),
       });
 
@@ -1408,14 +1408,14 @@ describe('Interceptors', () => {
 
     it('should call multiple interceptors in order', () => {
       const calls: string[] = [];
-      const int1 = createInterceptor<{ count: number }, void>('first', {
+      const int1 = createInterceptor<{ count: number }, unknown>('first', {
         onSend: () => calls.push('first'),
         onResult: (_action, result) => {
           calls.push('first-result');
           return result;
         },
       });
-      const int2 = createInterceptor<{ count: number }, void>('second', {
+      const int2 = createInterceptor<{ count: number }, unknown>('second', {
         onSend: () => calls.push('second'),
         onResult: (_action, result) => {
           calls.push('second-result');
@@ -1432,7 +1432,7 @@ describe('Interceptors', () => {
 
     it('should work with loggingInterceptor', () => {
       const mockLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
-      const interceptor = loggingInterceptor<{ count: number }, void>({
+      const interceptor = loggingInterceptor<{ count: number }, unknown>({
         logger: mockLogger,
         logResults: false,
       });

@@ -44,22 +44,28 @@ export function useWorkflow<P, S, O, R>(
 
   const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    const rt = createRuntime(workflow, props, { onOutput: (output: O) => {
+    return createRuntime(workflow, props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }}) as any;
-
-    // Register typed output handlers
-    const handlers = outputHandlersRef.current;
-    if (handlers) {
-      Object.entries(handlers).forEach(([type, handler]) => {
-        if (handler) {
-          rt.on(type as any, handler as any);
-        }
-      });
-    }
-
-    return rt;
   }, [runtimeKey]);
+
+  // Register typed output handlers with proper cleanup
+  useEffect(() => {
+    const handlers = outputHandlersRef.current;
+    if (!handlers) return;
+
+    const unsubscribes: Array<() => void> = [];
+    Object.entries(handlers).forEach(([type, handler]) => {
+      if (handler) {
+        const unsubscribe = runtime.on(type as any, handler as any);
+        unsubscribes.push(unsubscribe);
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [runtime, options?.outputHandlers]);
 
   // Dispose on unmount
   useEffect(() => {
@@ -143,22 +149,28 @@ export function useWorkflowWithState<P, S, O, R>(
 
   const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
   const runtime = useMemo(() => {
-    const rt = createRuntime(workflow, options.props, { onOutput: (output: O) => {
+    return createRuntime(workflow, options.props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
     }}) as any;
-
-    // Register typed output handlers
-    const handlers = outputHandlersRef.current;
-    if (handlers) {
-      Object.entries(handlers).forEach(([type, handler]) => {
-        if (handler) {
-          rt.on(type as any, handler as any);
-        }
-      });
-    }
-
-    return rt;
   }, [runtimeKey]);
+
+  // Register typed output handlers with proper cleanup
+  useEffect(() => {
+    const handlers = outputHandlersRef.current;
+    if (!handlers) return;
+
+    const unsubscribes: Array<() => void> = [];
+    Object.entries(handlers).forEach(([type, handler]) => {
+      if (handler) {
+        const unsubscribe = runtime.on(type as any, handler as any);
+        unsubscribes.push(unsubscribe);
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [runtime, options.outputHandlers]);
 
   // Dispose on unmount
   useEffect(() => {

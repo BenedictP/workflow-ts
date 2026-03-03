@@ -1,5 +1,5 @@
-import type { Interceptor } from './interceptor';
 import type { DevTools, RuntimeDevTools } from './devtools';
+import type { Interceptor } from './interceptor';
 import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
 

@@ -238,7 +238,12 @@ export function createDevTools<S = unknown, O = unknown, R = unknown>(
 
     deserialize: (data: string) => {
       try {
-        const parsed = JSON.parse(data);
+        const parsed = JSON.parse(data) as {
+          events: DevToolsEvent<S, O, R>[];
+          history: DevToolsSnapshot<S>[];
+          historyIndex: number;
+          currentState: S | undefined;
+        };
         events.length = 0;
         events.push(...parsed.events);
         history.length = 0;

@@ -21,7 +21,44 @@ Children receive updated props every render. If your child derives state from pr
 
 ## Output handling
 
-The optional output handler maps child outputs to parent actions. If you don’t need outputs, omit the handler.
+The optional output handler maps child outputs to parent actions. If you don't need outputs, omit the handler.
+
+### Type-safe output subscription
+
+For workflows with discriminated union outputs, you can subscribe to specific output types:
+
+```ts
+type ChildOutput = 
+  | { type: 'success'; data: string }
+  | { type: 'error'; error: string };
+
+// Runtime API - subscribe to specific types
+runtime.on('success', (output) => {
+  console.log('Loaded:', output.data);
+});
+
+runtime.on('error', (output) => {
+  console.log('Error:', output.error);
+});
+
+// Unsubscribe
+const unsubscribe = runtime.on('success', handler);
+unsubscribe();
+
+// Or remove all handlers for a type
+runtime.off('error');
+```
+
+### React hooks
+
+```ts
+const rendering = useWorkflow(childWorkflow, props, {
+  outputHandlers: {
+    success: (output) => navigate(/data/${output.data}),
+    error: (output) => showToast(output.error),
+  }
+});
+```
 
 ## Best practices
 

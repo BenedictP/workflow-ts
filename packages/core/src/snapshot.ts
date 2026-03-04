@@ -6,17 +6,23 @@
  * Error thrown when a snapshot cannot be parsed.
  * This typically indicates a corrupted or malformed snapshot from external storage.
  */
+const RAW_SNAPSHOT_MAX_LENGTH = 200;
+
 export class SnapshotParseError extends Error {
-  /** The raw snapshot string that failed to parse */
+  /** The raw snapshot string that failed to parse, truncated to 200 characters */
   public readonly rawSnapshot: string;
 
   constructor(message: string, cause: unknown, rawSnapshot: string) {
     super(message, { cause });
     this.name = 'SnapshotParseError';
-    this.rawSnapshot = rawSnapshot;
+    this.rawSnapshot =
+      rawSnapshot.length > RAW_SNAPSHOT_MAX_LENGTH
+        ? `${rawSnapshot.slice(0, RAW_SNAPSHOT_MAX_LENGTH)}…`
+        : rawSnapshot;
     // Maintains proper stack trace for where our error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, SnapshotParseError);
+    const captureStackTrace = (Error as any).captureStackTrace;
+    if (typeof captureStackTrace === 'function') {
+      captureStackTrace(this, SnapshotParseError);
     }
   }
 }

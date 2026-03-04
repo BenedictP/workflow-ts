@@ -29,4 +29,4 @@ pnpm docs:serve
 
 ## Contributing
 
-Documentation improvements are welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md).
+Documentation improvements are welcome. Open a pull request in this repository.

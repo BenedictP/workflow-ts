@@ -43,35 +43,43 @@ type State =
   | { type: 'error'; message: string };
 
 // 2. Define what users see (rendering is just data + callbacks)
-interface Rendering {
-  status: 'idle' | 'loading' | 'loaded' | 'error';
-  data?: string;
-  error?: string;
-  load: () => void;
-  retry: () => void;
-}
+type Rendering =
+  | { type: 'idle'; load: () => void }
+  | { type: 'loading' }
+  | { type: 'loaded'; data: string }
+  | { type: 'error'; message: string; retry: () => void };
 
 // 3. Define events to parent (optional)
-type Output = { type: 'loaded'; data: string };
+type Output = never; // no parent outputs in this example
 
 // 4. Implement the workflow
 const dataWorkflow: Workflow<void, State, Output, Rendering> = {
   initialState: () => ({ type: 'idle' }),
 
-  render: (_props, state, ctx) => ({
-    status: state.type,
-    data: state.type === 'loaded' ? state.data : undefined,
-    error: state.type === 'error' ? state.message : undefined,
-
-    load: () => {
-      ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
-      // Worker handles async (see Workers section)
-    },
-
-    retry: () => {
-      ctx.actionSink.send(() => ({ state: { type: 'idle' } }));
-    },
-  }),
+  render: (_props, state, ctx) => {
+    switch (state.type) {
+      case 'idle':
+        return {
+          type: 'idle',
+          load: () => {
+            ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
+            // Worker handles async (see Workers section)
+          },
+        };
+      case 'loading':
+        return { type: 'loading' };
+      case 'loaded':
+        return { type: 'loaded', data: state.data };
+      case 'error':
+        return {
+          type: 'error',
+          message: state.message,
+          retry: () => {
+            ctx.actionSink.send(() => ({ state: { type: 'idle' } }));
+          },
+        };
+    }
+  },
 };
 ```
 
@@ -86,11 +94,16 @@ function DataScreen() {
 }
 
 function DataRenderer({ rendering }: { rendering: Rendering }) {
-  if (rendering.status === 'loading') return <Spinner />;
-  if (rendering.status === 'error')
-    return <Error message={rendering.error} onRetry={rendering.retry} />;
-  if (rendering.status === 'loaded') return <DataDisplay data={rendering.data} />;
-  return <button onClick={rendering.load}>Load Data</button>;
+  switch (rendering.type) {
+    case 'idle':
+      return <button onClick={rendering.load}>Load Data</button>;
+    case 'loading':
+      return <Spinner />;
+    case 'error':
+      return <Error message={rendering.message} onRetry={rendering.retry} />;
+    case 'loaded':
+      return <DataDisplay data={rendering.data} />;
+  }
 }
 ```
 
@@ -102,18 +115,21 @@ With React Compiler enabled, manual `React.memo` is usually unnecessary.
 ```typescript
 import { createRuntime } from '@workflow-ts/core';
 
-test('loads data successfully', async () => {
+test('loads data successfully', () => {
   const runtime = createRuntime(dataWorkflow, undefined);
 
-  expect(runtime.getRendering().status).toBe('idle');
+  const initial = runtime.getRendering();
+  expect(initial.type).toBe('idle');
 
   // Simulate user action
-  runtime.getRendering().load();
-  expect(runtime.getRendering().status).toBe('loading');
+  if (initial.type === 'idle') {
+    initial.load();
+  }
+  expect(runtime.getRendering().type).toBe('loading');
 
   // Simulate async completion (or use real workers in tests)
   runtime.send(() => ({ state: { type: 'loaded', data: 'test' } }));
-  expect(runtime.getRendering().status).toBe('loaded');
+  expect(runtime.getRendering().type).toBe('loaded');
 
   runtime.dispose();
 });
@@ -193,9 +209,6 @@ render: (props, state, ctx) => ({
 See the [`examples/`](./examples) directory:
 
 - **Counter** - Basic state and actions
-- **Todo List** - List management with workers
-- **Login Flow** - Multi-step state machine with validation
-- **Nested Workflows** - Parent-child composition
 
 ## Documentation
 
@@ -204,14 +217,16 @@ See the [`examples/`](./examples) directory:
 
 ## Comparison
 
-| Feature                 | workflow-ts | Redux           | XState        | TCA (Swift) |
+| Feature                 | workflow-ts | Redux           | XState        | Zustand     |
 | ----------------------- | ----------- | --------------- | ------------- | ----------- |
-| State machine explicit  | ✅          | ❌              | ✅            | ✅          |
-| Zero boilerplate        | ✅          | ❌              | ⚠️            | ✅          |
-| Async built-in          | ✅          | ❌ (middleware) | ⚠️ (services) | ✅          |
-| Framework agnostic      | ✅          | ✅              | ✅            | ❌          |
-| First-class composition | ✅          | ⚠️              | ⚠️            | ✅          |
-| TypeScript native       | ✅          | ⚠️              | ✅            | ❌          |
+| State machine explicit  | ✅          | ❌              | ✅            | ❌          |
+| Zero boilerplate        | ⚠️          | ⚠️              | ⚠️            | ✅          |
+| Async built-in          | ✅          | ⚠️              | ✅            | ⚠️          |
+| Framework agnostic      | ✅          | ✅              | ✅            | ✅          |
+| First-class composition | ✅          | ⚠️              | ✅            | ⚠️          |
+| TypeScript native       | ✅          | ⚠️              | ✅            | ✅          |
+
+Legend: ✅ first-class, ⚠️ supported with patterns/add-ons, ❌ not a core model.
 
 ## Development
 

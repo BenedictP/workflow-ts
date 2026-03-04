@@ -1,13 +1,15 @@
 import { createRuntime } from '@workflow-ts/core';
 import { describe, expect, it } from 'vitest';
 
-import { counterWorkflow } from '../src/workflow';
+import { counterWorkflow, type Rendering } from '../src/workflow';
 
 describe('Counter Workflow', () => {
   it('starts at zero', () => {
     const runtime = createRuntime(counterWorkflow, undefined);
     expect(runtime.getState().count).toBe(0);
-    expect(runtime.getRendering().isZero).toBe(true);
+    const rendering = runtime.getRendering();
+    expect(rendering.type).toBe('atZero');
+    expect(rendering.count).toBe(0);
     runtime.dispose();
   });
   
@@ -15,11 +17,14 @@ describe('Counter Workflow', () => {
     const runtime = createRuntime(counterWorkflow, undefined);
     
     for (let i = 0; i < 15; i++) {
-      runtime.getRendering().increment();
+      const rendering = runtime.getRendering();
+      if (rendering.type === 'atZero' || rendering.type === 'counting') {
+        rendering.increment();
+      }
     }
     
     expect(runtime.getState().count).toBe(10);
-    expect(runtime.getRendering().isMax).toBe(true);
+    expect(runtime.getRendering().type).toBe('atMax');
     runtime.dispose();
   });
   
@@ -27,10 +32,16 @@ describe('Counter Workflow', () => {
     const outputs: unknown[] = [];
     const runtime = createRuntime(counterWorkflow, undefined, (o) => outputs.push(o));
     
-    runtime.getRendering().increment();
+    const rendering1 = runtime.getRendering();
+    if (rendering1.type === 'atZero') {
+      rendering1.increment();
+    }
     expect(outputs).toHaveLength(0);
     
-    runtime.getRendering().decrement();
+    const rendering2 = runtime.getRendering();
+    if (rendering2.type === 'counting') {
+      rendering2.decrement();
+    }
     expect(outputs).toEqual([{ type: 'reachedZero' }]);
     
     runtime.dispose();

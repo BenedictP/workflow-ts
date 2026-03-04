@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "dev": "vite"
+    "dev": "pnpm --filter '@workflow-ts/*' build && vite"
   },
   "dependencies": {
     "@workflow-ts/core": "workspace:*",

@@ -57,6 +57,11 @@ const rendering = useWorkflow(workflow, props);
 
 - Re-renders when workflow rendering changes.
 - Optional `options.resetOnWorkflowChange` recreates the runtime when workflow identity changes.
+- Works with React StrictMode development replays.
+- Runtime disposal remains strict in core: disposed runtimes still throw when used.
+- Optional `options.lifecycle` can pause runtime work while an app is backgrounded.
+- Optional `options.isActive` controls active/backgrounded state when using pause lifecycle.
+- In pause lifecycle mode, explicit active->inactive transitions dispose runtime immediately.
 
 ### `useWorkflowWithState`
 
@@ -69,6 +74,15 @@ const { rendering, state, props, updateProps, snapshot } = useWorkflowWithState(
 ```
 
 This hook uses `useSyncExternalStore` internally for consistent snapshots.
+
+For React Native backgrounding:
+
+```tsx
+const rendering = useWorkflow(workflow, props, undefined, {
+  lifecycle: 'pause-when-backgrounded',
+  isActive,
+});
+```
 
 ## Performance and React Compiler
 

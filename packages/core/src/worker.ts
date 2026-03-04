@@ -223,12 +223,12 @@ export function createWorker<T>(
  * const loadData = fromPromise('load-data', () => api.getData());
  * ```
  */
-export function fromPromise<T>(key: string, factory: () => Promise<T>): Worker<T> {
+export function fromPromise<T>(key: string, factory: (signal?: AbortSignal) => Promise<T>): Worker<T> {
   return createWorker(key, async (signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
       throw new DOMException('Aborted', 'AbortError');
     }
-    return factory();
+    return factory(signal);
   });
 }
 

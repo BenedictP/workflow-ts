@@ -73,6 +73,11 @@ function Counter() {
 **Options:**
 
 - `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`. To hard-reset in React, consider using a component `key`.
+- Hooks are compatible with React StrictMode development replays.
+- Disposed runtimes in `@workflow-ts/core` still throw when used (strict disposal contract).
+- `lifecycle?: 'always-on' | 'pause-when-backgrounded'` - Runtime lifecycle mode. Defaults to `'always-on'`.
+- `isActive?: boolean` - Active state used with `'pause-when-backgrounded'`. Defaults to `true`.
+- In pause mode, explicit `isActive: true -> false` transitions dispose runtime immediately.
 
 **Returns:** The current rendering (type `R` from workflow)
 
@@ -107,6 +112,10 @@ function SearchComponent() {
 - `props: P` - Initial props
 - `onOutput?: (output: O) => void` - Output callback
 - `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`.
+- StrictMode development replay is supported without changing core runtime disposal semantics.
+- `lifecycle?: 'always-on' | 'pause-when-backgrounded'` - Runtime lifecycle mode. Defaults to `'always-on'`.
+- `isActive?: boolean` - Active state used with `'pause-when-backgrounded'`. Defaults to `true`.
+- Inactive controls are safe: `updateProps` no-ops and `snapshot` returns last-known value (or `undefined`).
 
 **Returns:**
 
@@ -115,6 +124,34 @@ function SearchComponent() {
 - `props: P` - Current props
 - `updateProps: (props: P) => void` - Update props
 - `snapshot: () => string | undefined` - Get state snapshot
+
+## React Native lifecycle example
+
+Use `AppState` to pause runtime activity while the app is backgrounded:
+
+```tsx
+import { AppState } from 'react-native';
+import { useEffect, useState } from 'react';
+import { useWorkflow } from '@workflow-ts/react';
+
+function Screen() {
+  const [isActive, setIsActive] = useState(AppState.currentState === 'active');
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      setIsActive(nextState === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const rendering = useWorkflow(workflow, props, undefined, {
+    lifecycle: 'pause-when-backgrounded',
+    isActive,
+  });
+
+  return <Content rendering={rendering} />;
+}
+```
 
 ## Example: Async Data Fetching
 

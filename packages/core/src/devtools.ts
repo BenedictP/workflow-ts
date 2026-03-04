@@ -81,7 +81,7 @@ export interface DevTools<S = unknown, O = unknown, R = unknown> {
   /** Get all events */
   getEvents(): DevToolsEvent<S, O, R>[];
   /** Get current state snapshot */
-  getState(): { currentState: S; events: DevToolsEvent<S, O, R>[] };
+  getState(): { currentState: S | undefined; events: DevToolsEvent<S, O, R>[] };
   /** Get state history for time travel */
   getHistory(): DevToolsSnapshot<S>[];
   /** Jump to a specific state in history */
@@ -191,7 +191,7 @@ export function createDevTools<S = unknown, O = unknown, R = unknown>(
     getEvents: () => [...events],
 
     getState: () => ({
-      currentState: currentState as S,
+      currentState,
       events: [...events],
     }),
 

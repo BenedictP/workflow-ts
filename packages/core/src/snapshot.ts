@@ -21,7 +21,7 @@ export class SnapshotParseError extends Error {
         : rawSnapshot;
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     const errorConstructor = Error as typeof Error & {
-      captureStackTrace?: (target: object, constructorOpt?: Function) => void;
+      captureStackTrace?: (target: object, constructorOpt?: () => void) => void;
     };
     if (typeof errorConstructor.captureStackTrace === 'function') {
       errorConstructor.captureStackTrace(this, SnapshotParseError);

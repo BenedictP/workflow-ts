@@ -52,9 +52,9 @@ runtime.off('error');
 ### React hooks
 
 ```ts
-const rendering = useWorkflow(childWorkflow, props, {
+const rendering = useWorkflow(childWorkflow, props, undefined, {
   outputHandlers: {
-    success: (output) => navigate(/data/${output.data}),
+    success: (output) => navigate(`/data/${output.data}`),
     error: (output) => showToast(output.error),
   }
 });

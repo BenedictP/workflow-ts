@@ -84,7 +84,8 @@ const runtime = createRuntime(workflow, props, (output) => {
   - `initialState?: S` - Initial state (for testing)
   - `snapshot?: string` - Restore state from serialized snapshot
   - `debug?: boolean | DebugLogger` - Enable debug logging
-```
+  - `interceptors?: readonly Interceptor<S, O>[]` - Observe/modify action processing
+  - `devTools?: DevTools<S, O, R>` - Runtime inspection and event logging
 
 ```typescript
 // Get current rendering
@@ -113,6 +114,8 @@ The runtime class returned by `createRuntime`.
 | `subscribe(listener)` | Subscribe to rendering changes. Returns unsubscribe function. |
 | `updateProps(props)` | Update props (triggers re-render) |
 | `send(action)` | Send an action directly |
+| `on(type, handler)` | Subscribe to a specific output type (`{ type: string }` outputs) |
+| `off(type, handler?)` | Unsubscribe typed output handlers |
 | `snapshot()` | Get serialized state string |
 | `dispose()` | Clean up runtime and all children |
 | `isDisposed()` | Check if disposed |
@@ -177,8 +180,8 @@ const noop = noChange<State>();
 
 // Compose actions
 const resetAndNotify = compose(
-  (s) => ({ ...s, count: 0 }),
-  emit({ type: 'reset' })
+  action<{ count: number }>((s) => ({ ...s, count: 0 })),
+  action<{ count: number }, { type: 'reset' }>((s) => s, { type: 'reset' })
 );
 
 // Named action (for debugging)
@@ -246,8 +249,7 @@ const { snapshot, restore } = versionedSnapshot<State>(
 import { 
   type Workflow, 
   createRuntime, 
-  createWorker,
-  action 
+  createWorker
 } from '@workflow-ts/core';
 
 // State machine for HTTP request
@@ -272,10 +274,10 @@ const fetchWorker = createWorker('fetch', async (signal) => {
   return res.json();
 });
 
-const httpWorkflow: Workflow<string, State, never, Rendering> = {
+const httpWorkflow: Workflow<void, State, never, Rendering> = {
   initialState: () => ({ type: 'idle' }),
   
-  render: (url, state, ctx) => {
+  render: (_props, state, ctx) => {
     // Run worker when loading
     if (state.type === 'loading') {
       ctx.runWorker(fetchWorker, 'fetch', (result) => () => ({

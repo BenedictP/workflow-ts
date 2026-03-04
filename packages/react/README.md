@@ -73,6 +73,7 @@ function Counter() {
 **Options:**
 
 - `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`. To hard-reset in React, consider using a component `key`.
+- `outputHandlers?: { [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void }` - Typed per-output handlers for discriminated union outputs.
 - Hooks are compatible with React StrictMode development replays.
 - Disposed runtimes in `@workflow-ts/core` still throw when used (strict disposal contract).
 - `lifecycle?: 'always-on' | 'pause-when-backgrounded'` - Runtime lifecycle mode. Defaults to `'always-on'`.
@@ -111,6 +112,7 @@ function SearchComponent() {
 
 - `props: P` - Initial props
 - `onOutput?: (output: O) => void` - Output callback
+- `outputHandlers?: { [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void }` - Typed per-output handlers for discriminated union outputs.
 - `resetOnWorkflowChange?: boolean` - Recreate runtime when workflow identity changes (opt-in). Defaults to `false`.
 - StrictMode development replay is supported without changing core runtime disposal semantics.
 - `lifecycle?: 'always-on' | 'pause-when-backgrounded'` - Runtime lifecycle mode. Defaults to `'always-on'`.
@@ -156,6 +158,7 @@ function Screen() {
 ## Example: Async Data Fetching
 
 ```tsx
+import { useEffect } from 'react';
 import { useWorkflow } from '@workflow-ts/react';
 import { type Workflow, createWorker } from '@workflow-ts/core';
 
@@ -219,7 +222,9 @@ function UserList() {
 ## Example: Props-Driven Workflow
 
 ```tsx
+import { useState } from 'react';
 import { useWorkflow } from '@workflow-ts/react';
+import { type Workflow } from '@workflow-ts/core';
 
 // Workflow that derives state from props
 const searchWorkflow: Workflow<{ query: string }, State, never, Rendering> = {

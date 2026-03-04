@@ -919,15 +919,13 @@ describe('Disposal cleanup', () => {
     }).toThrow('Cannot use disposed workflow runtime');
   });
 
-  it('should silently ignore send after dispose', () => {
+  it('should throw on send after dispose', () => {
     const runtime = createRuntime(counterWorkflow, undefined);
-    const initialState = runtime.getState();
     runtime.dispose();
 
-    // Should not throw - silently ignores actions after disposal to handle race conditions
     expect(() => {
       runtime.send((s) => ({ count: s.count + 1 }));
-    }).not.toThrow();
+    }).toThrow('Cannot use disposed workflow runtime');
   });
 });
 

@@ -20,9 +20,11 @@ export class SnapshotParseError extends Error {
         ? `${rawSnapshot.slice(0, RAW_SNAPSHOT_MAX_LENGTH)}…`
         : rawSnapshot;
     // Maintains proper stack trace for where our error was thrown (only available on V8)
-    const captureStackTrace = (Error as any).captureStackTrace;
-    if (typeof captureStackTrace === 'function') {
-      captureStackTrace(this, SnapshotParseError);
+    const errorConstructor = Error as typeof Error & {
+      captureStackTrace?: (target: object, constructorOpt?: Function) => void;
+    };
+    if (typeof errorConstructor.captureStackTrace === 'function') {
+      errorConstructor.captureStackTrace(this, SnapshotParseError);
     }
   }
 }

@@ -41,7 +41,12 @@ export {
 } from './worker';
 
 // Snapshot utilities
-export { jsonSnapshot, type Snapshotable, versionedSnapshot } from './snapshot';
+export {
+  jsonSnapshot,
+  SnapshotParseError,
+  type Snapshotable,
+  versionedSnapshot,
+} from './snapshot';
 
 // Interceptors
 export {

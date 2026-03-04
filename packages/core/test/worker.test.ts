@@ -379,6 +379,88 @@ describe('Workflow with workers', () => {
 });
 
 // ============================================================
+// Disposal Reentrancy Regression Tests
+// ============================================================
+
+describe('Disposal reentrancy (regression: "Cannot use disposed workflow runtime")', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not throw when on() handler disposes runtime during worker output processing', async () => {
+    // Regression: worker output fires an action that emits a typed output. The on()
+    // handler calls dispose() inside processAction — before emitTypedOutput returns.
+    // Before the fix, processAction would then call notifyListeners() on a disposed
+    // runtime, hitting assertNotDisposed() and throwing "Cannot use disposed workflow
+    // runtime". That error was caught by WorkerManager and logged via console.error.
+    const consoleErrors: unknown[][] = [];
+    vi.spyOn(console, 'error').mockImplementation((...args) => consoleErrors.push(args));
+
+    interface Output { type: 'done' }
+    const worker = createWorker('test', async () => 'result');
+
+    const workflow: Workflow<void, { count: number }, Output, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(worker, 'test', () => (_s) => ({
+          state: { count: 1 },
+          output: { type: 'done' as const },
+        }));
+        return { count: state.count };
+      },
+    };
+
+    const runtime = createRuntime(workflow, undefined);
+    runtime.getRendering();
+
+    runtime.on('done', () => {
+      runtime.dispose();
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(runtime.isDisposed()).toBe(true);
+    expect(consoleErrors).toHaveLength(0);
+  });
+
+  it('does not throw when subscribe() listener disposes runtime while an action is queued', async () => {
+    // Regression: a subscribe listener queues a new action (via send) then disposes
+    // the runtime. Before the fix, the while loop in handleAction() had no disposed
+    // check and would process the queued action on a disposed runtime, calling
+    // notifyListeners() -> getRendering() -> assertNotDisposed() -> throw.
+    const consoleErrors: unknown[][] = [];
+    vi.spyOn(console, 'error').mockImplementation((...args) => consoleErrors.push(args));
+
+    const increment = (s: { count: number }) => ({ state: { count: s.count + 1 } });
+    const worker = createWorker('test', async () => 'result');
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(worker, 'test', () => increment);
+        return { count: state.count };
+      },
+    };
+
+    const runtime = createRuntime(workflow, undefined);
+    runtime.getRendering();
+
+    // Queuing an action while isProcessingActions=true puts it in the action queue.
+    // Disposing immediately after means the while loop must check disposed before
+    // processing queued actions, or the next processAction call will throw.
+    runtime.subscribe(() => {
+      runtime.send(increment);
+      runtime.dispose();
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(runtime.isDisposed()).toBe(true);
+    expect(consoleErrors).toHaveLength(0);
+  });
+});
+
+// ============================================================
 // AbortSignal Integration Tests
 // ============================================================
 

@@ -186,6 +186,7 @@ export class WorkflowRuntime<P, S, O, R> {
    * @param action - The action to process
    */
   public send(action: Action<S, O>): void {
+    this.assertNotDisposed();
     this.handleAction(action);
   }
 
@@ -349,7 +350,7 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   private handleAction(action: Action<S, O>): void {
-    this.assertNotDisposed();
+    if (this.disposed) return;  // Silently ignore actions after disposal
 
     if (this.isRendering || this.isProcessingActions) {
       this.actionQueue.push(action);
@@ -360,7 +361,7 @@ export class WorkflowRuntime<P, S, O, R> {
 
     try {
       this.processAction(action);
-      while (this.actionQueue.length > 0) {
+      while (!this.disposed && this.actionQueue.length > 0) {
         const next = this.actionQueue.shift();
         if (next) this.processAction(next);
       }
@@ -559,13 +560,14 @@ export class WorkflowRuntime<P, S, O, R> {
         this.handleAction(handler(output));
       },
       (): void => {
-        // Worker completed
+        if (this.disposed) return;
         this.debug?.('log', 'Worker finished', { worker: key });
       },
     );
   }
 
   private notifyListeners(): void {
+    if (this.disposed) return;
     const rendering = this.getRendering();
     this.listeners.forEach((listener) => {
       try {

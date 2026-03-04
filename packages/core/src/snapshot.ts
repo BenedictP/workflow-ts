@@ -3,6 +3,25 @@
 // ============================================================
 
 /**
+ * Error thrown when a snapshot cannot be parsed.
+ * This typically indicates a corrupted or malformed snapshot from external storage.
+ */
+export class SnapshotParseError extends Error {
+  /** The raw snapshot string that failed to parse */
+  public readonly rawSnapshot: string;
+
+  constructor(message: string, cause: unknown, rawSnapshot: string) {
+    super(message, { cause });
+    this.name = 'SnapshotParseError';
+    this.rawSnapshot = rawSnapshot;
+    // Maintains proper stack trace for where our error was thrown (only available on V8)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, SnapshotParseError);
+    }
+  }
+}
+
+/**
  * Interface for types that can be snapshotted.
  */
 export interface Snapshotable {
@@ -35,7 +54,17 @@ export function jsonSnapshot<S>(): {
 } {
   return {
     snapshot: (state: S): string => JSON.stringify(state),
-    restore: (snapshot: string): S => JSON.parse(snapshot) as S,
+    restore: (snapshot: string): S => {
+      try {
+        return JSON.parse(snapshot) as S;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? `Failed to parse snapshot: ${error.message}`
+            : 'Failed to parse snapshot: Unknown error';
+        throw new SnapshotParseError(message, error, snapshot);
+      }
+    },
   };
 }
 

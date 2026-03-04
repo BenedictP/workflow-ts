@@ -1,5 +1,5 @@
 import type { Workflow } from '@workflow-ts/core';
-import { createRuntime } from '@workflow-ts/core';
+import { createRuntime, WorkflowRuntime } from '@workflow-ts/core';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 /**
@@ -41,10 +41,10 @@ export function useWorkflow<P, S, O, R>(
   onOutputRef.current = onOutput;
 
   const runtimeKey = options?.resetOnWorkflowChange === true ? workflow : 'static-runtime';
-  const runtime = useMemo(() => {
+  const runtime = useMemo((): WorkflowRuntime<P, S, O, R> => {
     return createRuntime(workflow, props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
-    }}) as any;
+    }});
   }, [runtimeKey]);
 
   // Register typed output handlers with proper cleanup
@@ -53,12 +53,22 @@ export function useWorkflow<P, S, O, R>(
     if (!handlers) return;
 
     const unsubscribes: (() => void)[] = [];
-    Object.entries(handlers).forEach(([type, handler]) => {
+    
+    // Type-safe iteration over output handlers
+    // Object.entries loses type information, so we need to cast the type and handler
+    type OutputType = O extends { type: string } ? O['type'] : never;
+    
+    for (const [type, handler] of Object.entries(handlers)) {
       if (handler) {
-        const unsubscribe = runtime.on(type as any, handler as any) as () => void;
+        // Cast type to OutputType and handler to the expected signature
+        // This is safe because outputHandlers is typed to only allow valid type/handler pairs
+        const unsubscribe = runtime.on(
+          type as OutputType,
+          handler as (output: Extract<O, { type: OutputType }>) => void
+        );
         unsubscribes.push(unsubscribe);
       }
-    });
+    }
 
     return () => {
       unsubscribes.forEach(unsubscribe => unsubscribe());
@@ -144,10 +154,10 @@ export function useWorkflowWithState<P, S, O, R>(
   onOutputRef.current = options.onOutput;
 
   const runtimeKey = options.resetOnWorkflowChange === true ? workflow : 'static-runtime';
-  const runtime = useMemo(() => {
+  const runtime = useMemo((): WorkflowRuntime<P, S, O, R> => {
     return createRuntime(workflow, options.props, { onOutput: (output: O) => {
       onOutputRef.current?.(output);
-    }}) as any;
+    }});
   }, [runtimeKey]);
 
   // Register typed output handlers with proper cleanup
@@ -156,12 +166,22 @@ export function useWorkflowWithState<P, S, O, R>(
     if (!handlers) return;
 
     const unsubscribes: (() => void)[] = [];
-    Object.entries(handlers).forEach(([type, handler]) => {
+    
+    // Type-safe iteration over output handlers
+    // Object.entries loses type information, so we need to cast the type and handler
+    type OutputType = O extends { type: string } ? O['type'] : never;
+    
+    for (const [type, handler] of Object.entries(handlers)) {
       if (handler) {
-        const unsubscribe = runtime.on(type as any, handler as any) as () => void;
+        // Cast type to OutputType and handler to the expected signature
+        // This is safe because outputHandlers is typed to only allow valid type/handler pairs
+        const unsubscribe = runtime.on(
+          type as OutputType,
+          handler as (output: Extract<O, { type: OutputType }>) => void
+        );
         unsubscribes.push(unsubscribe);
       }
-    });
+    }
 
     return () => {
       unsubscribes.forEach(unsubscribe => unsubscribe());

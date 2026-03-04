@@ -243,9 +243,9 @@ export class WorkflowRuntime<P, S, O, R> {
    * });
    * ```
    */
-  public on<K extends string>(
+  public on<K extends O extends { type: string } ? O['type'] : never>(
     type: K,
-    handler: (output: O extends { type: K } ? O : never) => void,
+    handler: (output: Extract<O, { type: K }>) => void,
   ): () => void {
     this.assertNotDisposed();
 
@@ -270,9 +270,9 @@ export class WorkflowRuntime<P, S, O, R> {
    * @param type - The output type to stop listening for
    * @param handler - Optional specific handler to remove
    */
-  public off<K extends string>(
+  public off<K extends O extends { type: string } ? O['type'] : never>(
     type: K,
-    handler?: (output: O extends { type: K } ? O : never) => void,
+    handler?: (output: Extract<O, { type: K }>) => void,
   ): void {
     const key = `typed:${type}`;
     const handlers = this.typedOutputHandlers.get(key);

@@ -273,7 +273,7 @@ const cloneComparableValue = (value: unknown): unknown => cloneValue(value, 'com
 
 interface DeepEqualContext {
   readonly seen: WeakMap<object, object>;
-  readonly seenPairs: Array<readonly [object, object]>;
+  readonly seenPairs: (readonly [object, object])[];
 }
 
 const createDeepEqualContext = (): DeepEqualContext => ({
@@ -634,7 +634,7 @@ interface WorkflowRuntimeOptions<O> {
   resetOnWorkflowChange?: boolean;
 }
 
-export interface UseWorkflowHookOptions<O> extends WorkflowRuntimeOptions<O> {}
+export type UseWorkflowHookOptions<O> = WorkflowRuntimeOptions<O>;
 
 export function useWorkflow<P extends AllowedProp, S, O, R>(
   workflow: Workflow<P, S, O, R>,

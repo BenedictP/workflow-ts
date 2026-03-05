@@ -579,7 +579,6 @@ export class WorkflowRuntime<P, S, O, R> {
       child = new WorkflowRuntime<CP, CS, CO, CR>({
         workflow,
         props,
-        propsEqual: this.config.propsEqual as PropsComparator<CP> | undefined,
         onOutput: (output: CO) => {
           this.debug?.('log', 'Child output', { childKey, output });
           this.getOutputHandler(childKey)?.(output);

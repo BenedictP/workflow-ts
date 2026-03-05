@@ -775,7 +775,7 @@ describe('Child workflow lifecycle', () => {
     runtime.dispose();
   });
 
-  it('should apply custom propsEqual to child runtimes', () => {
+  it('should not apply parent propsEqual to child runtimes', () => {
     interface ParentProps {
       readonly page: number;
       readonly child: {
@@ -818,7 +818,7 @@ describe('Child workflow lifecycle', () => {
     expect(runtime.getRendering().childValue).toBe(10);
     runtime.updateProps({ page: 2, child: { value: 10 } });
     expect(runtime.getRendering().childValue).toBe(10);
-    expect(childPropsChanges).toEqual([]);
+    expect(childPropsChanges).toEqual([{ oldValue: 10, newValue: 10 }]);
 
     runtime.dispose();
   });

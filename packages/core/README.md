@@ -116,7 +116,7 @@ const runtime = createRuntime(workflow, props, (output) => {
   - `debug?: boolean | DebugLogger` - Enable debug logging
   - `interceptors?: readonly Interceptor<S, O>[]` - Observe/modify action processing
   - `devTools?: DevTools<S, O, R>` - Runtime inspection and event logging
-  - `propsEqual?: (prev: P, next: P) => boolean` - Props equality comparator used by `updateProps` and `onPropsChanged` (defaults to `Object.is`)
+  - `propsEqual?: (prev: P, next: P) => boolean` - Props equality comparator used by this runtime's `updateProps` and `onPropsChanged` (defaults to `Object.is`; not inherited by child runtimes)
 
 ```typescript
 // Get current rendering

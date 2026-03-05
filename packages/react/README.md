@@ -37,7 +37,7 @@ This keeps workflow logic inside workflows and keeps React focused on rendering.
 ## Props Contract
 
 `useWorkflow` and `useWorkflowWithState` expose a TypeScript `AllowedProp` contract for hook props.
-At runtime, unsupported values are validated and rejected in development (`NODE_ENV !== 'production'`).
+At runtime, unsupported values are validated and rejected only in development environments (React Native `__DEV__`, `NODE_ENV !== 'production'`, or bundler dev flags).
 
 Allowed values:
 - primitives (`string`, `number`, `boolean`, `bigint`, `symbol`, `null`, `undefined`)

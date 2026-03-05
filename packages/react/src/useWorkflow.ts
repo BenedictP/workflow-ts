@@ -41,16 +41,53 @@ interface PropsSnapshot {
   readonly runtimeValue: unknown;
 }
 
+interface PropsValidationEnvironment {
+  readonly reactNativeDev: unknown;
+  readonly nodeEnv: unknown;
+  readonly viteDev: unknown;
+  readonly viteProd: unknown;
+  readonly viteMode: unknown;
+}
+
 const comparableAccessorTag = Symbol('workflowComparableAccessor');
 const allowedPropsDescription =
   'primitives, functions, Array, plain object, Date, Map, Set, ArrayBuffer, DataView, TypedArray';
+
+/**
+ * Internal helper: resolve whether runtime props validation should run from env signals.
+ */
+export const resolveShouldValidateProps = (env: PropsValidationEnvironment): boolean => {
+  if (typeof env.reactNativeDev === 'boolean') return env.reactNativeDev;
+
+  if (typeof env.nodeEnv === 'string') return env.nodeEnv !== 'production';
+
+  if (typeof env.viteDev === 'boolean') return env.viteDev;
+  if (typeof env.viteProd === 'boolean') return !env.viteProd;
+  if (typeof env.viteMode === 'string') return env.viteMode !== 'production';
+
+  return false;
+};
+
 const shouldValidateProps = (): boolean => {
-  if (typeof process === 'undefined') return true;
-  return process.env['NODE_ENV'] !== 'production';
+  const importMeta = import.meta as ImportMeta & {
+    readonly env?: {
+      readonly DEV?: unknown;
+      readonly PROD?: unknown;
+      readonly MODE?: unknown;
+    };
+  };
+  // Prefer explicit runtime signals and default to false when environment is unknown.
+  return resolveShouldValidateProps({
+    reactNativeDev: (globalThis as { readonly __DEV__?: unknown }).__DEV__,
+    nodeEnv: typeof process === 'undefined' ? undefined : process.env?.['NODE_ENV'],
+    viteDev: importMeta.env?.DEV,
+    viteProd: importMeta.env?.PROD,
+    viteMode: importMeta.env?.MODE,
+  });
 };
 
 const isPlainObject = (value: object): boolean => {
-  const prototype = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value) as object | null;
   return prototype === Object.prototype || prototype === null;
 };
 
@@ -80,7 +117,7 @@ const throwUnsupportedPropsError = (path: string, value: unknown): never => {
   );
 };
 
-const assertSupportedProps = (value: unknown, path = 'props', seen = new WeakSet<object>()): void => {
+const assertSupportedProps = (value: unknown, path = 'props', seen = new WeakSet()): void => {
   if (value === null || value === undefined) return;
   if (typeof value === 'function') return;
   if (!isObjectLike(value)) return;
@@ -316,7 +353,7 @@ const deepEqual = (a: unknown, b: unknown, seen = new WeakMap<object, object>())
     if (!(a instanceof Set) || !(b instanceof Set)) return false;
     if (a.size !== b.size) return false;
 
-    const bValues = [...b.values()];
+    const bValues: unknown[] = [...b.values()];
     let index = 0;
     for (const aValue of a.values()) {
       const bValue = bValues[index];

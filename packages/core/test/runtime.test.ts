@@ -927,6 +927,33 @@ describe('Disposal cleanup', () => {
       runtime.send((s) => ({ count: s.count + 1 }));
     }).toThrow('Cannot use disposed workflow runtime');
   });
+
+  it('should stop draining queued actions after a queued action disposes runtime', () => {
+    const runtime = createRuntime(counterWorkflow, undefined);
+    const processed: string[] = [];
+    let queued = false;
+
+    runtime.subscribe(() => {
+      if (queued) return;
+      queued = true;
+
+      // Sends from within a listener are queued because handleAction is mid-drain.
+      runtime.send((state) => {
+        processed.push('dispose');
+        runtime.dispose();
+        return { state: { count: state.count + 1 } };
+      });
+      runtime.send((state) => {
+        processed.push('after-dispose');
+        return { state: { count: state.count + 100 } };
+      });
+    });
+
+    runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+    expect(runtime.isDisposed()).toBe(true);
+    expect(processed).toEqual(['dispose']);
+  });
 });
 
 // ============================================================

@@ -4,7 +4,7 @@ import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AllowedProp } from '../src/useWorkflow';
-import { useWorkflow, useWorkflowWithState } from '../src/useWorkflow';
+import { resolveShouldValidateProps, useWorkflow, useWorkflowWithState } from '../src/useWorkflow';
 
 const flushTimers = async (): Promise<void> => {
   await new Promise<void>((resolve) => {
@@ -168,6 +168,76 @@ const anyPropsWorkflow: Workflow<{ value: AllowedProp }, null, never, { value: A
 // ============================================================
 // Tests
 // ============================================================
+
+describe('resolveShouldValidateProps', () => {
+  it('prefers react-native __DEV__ when present', () => {
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: true,
+        nodeEnv: 'production',
+        viteDev: false,
+        viteProd: true,
+        viteMode: 'production',
+      }),
+    ).toBe(true);
+  });
+
+  it('uses NODE_ENV when __DEV__ is unavailable', () => {
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: undefined,
+        nodeEnv: 'production',
+        viteDev: true,
+        viteProd: false,
+        viteMode: 'development',
+      }),
+    ).toBe(false);
+  });
+
+  it('falls back to import.meta.env DEV/PROD/MODE signals', () => {
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: undefined,
+        nodeEnv: undefined,
+        viteDev: true,
+        viteProd: undefined,
+        viteMode: undefined,
+      }),
+    ).toBe(true);
+
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: undefined,
+        nodeEnv: undefined,
+        viteDev: undefined,
+        viteProd: true,
+        viteMode: undefined,
+      }),
+    ).toBe(false);
+
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: undefined,
+        nodeEnv: undefined,
+        viteDev: undefined,
+        viteProd: undefined,
+        viteMode: 'production',
+      }),
+    ).toBe(false);
+  });
+
+  it('defaults to false when no signal is available', () => {
+    expect(
+      resolveShouldValidateProps({
+        reactNativeDev: undefined,
+        nodeEnv: undefined,
+        viteDev: undefined,
+        viteProd: undefined,
+        viteMode: undefined,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('useWorkflow', () => {
   it('should return initial rendering', () => {
@@ -365,6 +435,53 @@ describe('useWorkflow', () => {
           }),
         );
       }).toThrowError(/Unsupported workflow props at "props\.value"/);
+    }
+  });
+
+  it('should validate unsupported props when __DEV__ is true', () => {
+    const runtimeGlobals = globalThis as { __DEV__?: unknown };
+    const previousDev = runtimeGlobals.__DEV__;
+    const previousNodeEnv = process.env.NODE_ENV;
+    runtimeGlobals.__DEV__ = true;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      expect(() => {
+        renderHook(() =>
+          useWorkflow(anyPropsWorkflow, { value: new URL('https://example.com') as unknown as AllowedProp }),
+        );
+      }).toThrowError(/Unsupported workflow props at "props\.value": URL/);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousDev === undefined) {
+        delete runtimeGlobals.__DEV__;
+      } else {
+        runtimeGlobals.__DEV__ = previousDev;
+      }
+    }
+  });
+
+  it('should skip unsupported prop validation when __DEV__ is false', () => {
+    const runtimeGlobals = globalThis as { __DEV__?: unknown };
+    const previousDev = runtimeGlobals.__DEV__;
+    const previousNodeEnv = process.env.NODE_ENV;
+    runtimeGlobals.__DEV__ = false;
+    process.env.NODE_ENV = 'development';
+
+    try {
+      const value = new URL('https://example.com');
+      const { result, unmount } = renderHook(() =>
+        useWorkflow(anyPropsWorkflow, { value: value as unknown as AllowedProp }),
+      );
+      expect(result.current.value).toBe(value);
+      unmount();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      if (previousDev === undefined) {
+        delete runtimeGlobals.__DEV__;
+      } else {
+        runtimeGlobals.__DEV__ = previousDev;
+      }
     }
   });
 

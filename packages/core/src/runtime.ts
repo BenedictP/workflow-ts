@@ -361,11 +361,10 @@ export class WorkflowRuntime<P, S, O, R> {
 
     try {
       this.processAction(action);
-      for (
-        let next = this.actionQueue.shift();
-        next !== undefined && !this.disposed;
-        next = this.actionQueue.shift()
-      ) {
+      while (!this.disposed) {
+        // Only shift when active so disposal cannot mutate the queue as a side effect of loop control flow.
+        const next = this.actionQueue.shift();
+        if (next === undefined) break;
         this.processAction(next);
       }
     } catch (error) {

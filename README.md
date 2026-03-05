@@ -1,257 +1,332 @@
 # workflow-ts
 
-A TypeScript implementation of Square's [Workflow architecture](https://developer.squareup.com/blog/workflow-compose/) for building state-machine-driven applications.
+TypeScript implementation of Square's [Workflow architecture](https://developer.squareup.com/blog/workflow-compose/) for explicit, testable, state-machine-driven application logic.
 
-> **Why Workflow?** Complex UIs have complex state. Workflow makes that state explicit, testable, and composable. Instead of scattered `useState` calls and imperative logic, you define clear state machines with declarative rendering.
+## Why workflow-ts
 
-## Packages
+- Explicit state machines instead of scattered UI flags
+- Unidirectional action flow for predictable transitions
+- Composable parent-child workflows
+- Async work with render-scoped lifecycle via workers
+- UI-agnostic core runtime with React hooks in a separate package
 
-| Package                                  | Description                          |
-| ---------------------------------------- | ------------------------------------ |
-| [`@workflow-ts/core`](./packages/core)   | Core workflow runtime and types      |
-| [`@workflow-ts/react`](./packages/react) | React hooks for workflow integration |
+## When to use it
 
-## Features
+Use workflow-ts when you want explicit, deterministic state transitions and a clear separation between business logic orchestration and UI rendering.
 
-- 🎯 **State Machine First** - Model your domain as explicit states, not scattered booleans
-- 🔄 **Unidirectional Data Flow** - State changes through actions only, making debugging trivial
-- 🧩 **Composable** - Nested workflows compose naturally as parent-child trees
-- 🧪 **Testable** - Test complex flows without UI, mock time, simulate user actions
-- ⚛️ **Framework Agnostic** - Core works anywhere; React bindings included
-- 📦 **Zero Dependencies** - Core has no runtime dependencies
-
-## Quick Start
-
-### Install
+## Install
 
 ```bash
 pnpm add @workflow-ts/core
-# For React:
+# React bindings:
 pnpm add @workflow-ts/react
 ```
 
-### Define a Workflow
+## Quick Start: One Cohesive Example
 
+This example models a small "load profile" flow and is reused in the concept snippets below.
+Canonical runnable source: [`examples/readme-profile`](./examples/readme-profile).
+
+### 1. Define the workflow (`@workflow-ts/core`)
+
+<!-- README_SNIPPET:workflow:start -->
 ```typescript
-import { type Workflow } from '@workflow-ts/core';
+import { createWorker, type Workflow } from '@workflow-ts/core';
 
-// 1. Define your state (explicit state machine)
-type State =
-  | { type: 'idle' }
+export interface Props {
+  userId: string;
+}
+
+export type State =
   | { type: 'loading' }
-  | { type: 'loaded'; data: string }
+  | { type: 'loaded'; name: string }
   | { type: 'error'; message: string };
 
-// 2. Define what users see (rendering is just data + callbacks)
-type Rendering =
-  | { type: 'idle'; load: () => void }
-  | { type: 'loading' }
-  | { type: 'loaded'; data: string }
-  | { type: 'error'; message: string; retry: () => void };
+export interface Output {
+  type: 'closed';
+}
 
-// 3. Define events to parent (optional)
-type Output = never; // no parent outputs in this example
+export type Rendering =
+  | { type: 'loading'; close: () => void }
+  | { type: 'loaded'; name: string; reload: () => void; close: () => void }
+  | { type: 'error'; message: string; retry: () => void; close: () => void };
 
-// 4. Implement the workflow
-const dataWorkflow: Workflow<void, State, Output, Rendering> = {
-  initialState: () => ({ type: 'idle' }),
+type LoadProfileResult =
+  | { ok: true; name: string }
+  | { ok: false; message: string };
+
+const loadProfileWorker = createWorker<LoadProfileResult>('load-profile', async (signal) => {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => resolve(), 5);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+
+  if (signal.aborted) {
+    return { ok: false, message: 'Cancelled' };
+  }
+
+  return { ok: true as const, name: 'Ada' };
+});
+
+export const profileWorkflow: Workflow<Props, State, Output, Rendering> = {
+  initialState: () => ({ type: 'loading' }),
 
   render: (_props, state, ctx) => {
+    if (state.type === 'loading') {
+      ctx.runWorker(loadProfileWorker, 'profile-load', (result) => () => ({
+        state: result.ok
+          ? { type: 'loaded', name: result.name }
+          : { type: 'error', message: result.message },
+      }));
+    }
+
     switch (state.type) {
-      case 'idle':
-        return {
-          type: 'idle',
-          load: () => {
-            ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
-            // Worker handles async (see Workers section)
-          },
-        };
       case 'loading':
-        return { type: 'loading' };
+        return {
+          type: 'loading',
+          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+        };
       case 'loaded':
-        return { type: 'loaded', data: state.data };
+        return {
+          type: 'loaded',
+          name: state.name,
+          reload: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
+          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+        };
       case 'error':
         return {
           type: 'error',
           message: state.message,
-          retry: () => {
-            ctx.actionSink.send(() => ({ state: { type: 'idle' } }));
-          },
+          retry: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
+          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
         };
     }
   },
 };
 ```
+<!-- README_SNIPPET:workflow:end -->
 
-### Use with React
+Deep dive: [Overview](./docs/guides/overview.md), [Workers](./docs/guides/workers.md)
 
+### 2. Subscribe in React (`@workflow-ts/react`)
+
+<!-- README_SNIPPET:react:start -->
 ```tsx
 import { useWorkflow } from '@workflow-ts/react';
+import type { JSX } from 'react';
 
-function DataScreen() {
-  const rendering = useWorkflow(dataWorkflow, undefined);
-  return <DataRenderer rendering={rendering} />;
-}
+import { profileWorkflow } from './workflow';
 
-function DataRenderer({ rendering }: { rendering: Rendering }) {
+export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
+  const rendering = useWorkflow(
+    profileWorkflow,
+    { userId },
+    (output) => {
+      switch (output.type) {
+        case 'closed':
+          console.log('Profile flow closed');
+          break;
+      }
+    },
+  );
+
   switch (rendering.type) {
-    case 'idle':
-      return <button onClick={rendering.load}>Load Data</button>;
     case 'loading':
-      return <Spinner />;
-    case 'error':
-      return <Error message={rendering.message} onRetry={rendering.retry} />;
+      return (
+        <section>
+          <h1>Profile</h1>
+          <p>Loading...</p>
+          <button onClick={rendering.close}>Close</button>
+        </section>
+      );
     case 'loaded':
-      return <DataDisplay data={rendering.data} />;
+      return (
+        <section>
+          <h1>Welcome {rendering.name}</h1>
+          <button onClick={rendering.reload}>Reload</button>
+          <button onClick={rendering.close}>Close</button>
+        </section>
+      );
+    case 'error':
+      return (
+        <section>
+          <h1>Profile</h1>
+          <p>{rendering.message}</p>
+          <button onClick={rendering.retry}>Retry</button>
+          <button onClick={rendering.close}>Close</button>
+        </section>
+      );
   }
 }
 ```
+<!-- README_SNIPPET:react:end -->
 
-Preferred architecture is subscribe to a workflow rendering, then map rendering data to React components.
-With React Compiler enabled, manual `React.memo` is usually unnecessary.
-React hooks expose a TypeScript plain-only props contract and validate unsupported values only in development environments (for example React Native `__DEV__`, `NODE_ENV !== 'production'`, or bundler dev flags).
+Deep dive: [React Integration](./docs/guides/react.md)
 
-### Test Without UI
+### 3. Test without UI
 
+<!-- README_SNIPPET:test:start -->
 ```typescript
 import { createRuntime } from '@workflow-ts/core';
+import { expect, it } from 'vitest';
 
-test('loads data successfully', () => {
-  const runtime = createRuntime(dataWorkflow, undefined);
+import { profileWorkflow } from '../src/workflow';
 
-  const initial = runtime.getRendering();
-  expect(initial.type).toBe('idle');
+it('transitions loading -> loaded', () => {
+  const runtime = createRuntime(profileWorkflow, { userId: 'u1' });
 
-  // Simulate user action
-  if (initial.type === 'idle') {
-    initial.load();
-  }
   expect(runtime.getRendering().type).toBe('loading');
+  expect(runtime.getState().type).toBe('loading');
 
-  // Simulate async completion (or use real workers in tests)
-  runtime.send(() => ({ state: { type: 'loaded', data: 'test' } }));
-  expect(runtime.getRendering().type).toBe('loaded');
+  runtime.send(() => ({ state: { type: 'loaded', name: 'Ada' } }));
+  const loaded = runtime.getRendering();
+  expect(loaded.type).toBe('loaded');
+  expect((loaded as Extract<typeof loaded, { type: 'loaded' }>).name).toBe('Ada');
 
   runtime.dispose();
 });
 ```
+<!-- README_SNIPPET:test:end -->
+
+Deep dive: [Testing](./docs/guides/testing.md)
 
 ## Core Concepts
 
+These are concise mechanics. For complete walkthroughs, start at [Documentation Index](./docs/index.md).
+
 ### State
 
-State is internal and immutable. Each state is a distinct node in your state machine:
+State is internal and immutable. Model each meaningful step explicitly:
 
 ```typescript
 type State =
-  | { type: 'editing'; draft: string }
-  | { type: 'saving'; draft: string }
-  | { type: 'saved'; publishedAt: Date };
+  | { type: 'loading' }
+  | { type: 'loaded'; name: string }
+  | { type: 'error'; message: string };
 ```
+
+More: [Overview](./docs/guides/overview.md)
 
 ### Actions
 
-Actions are pure functions that transform state:
+Actions are pure reducers that return next state and optional output:
 
 ```typescript
-ctx.actionSink.send((state) => ({
-  state: { type: 'saving', draft: state.draft },
-  output: { type: 'saveStarted' }, // optional event to parent
-}));
+ctx.actionSink.send((state) =>
+  state.type === 'error'
+    ? { state: { type: 'loading' } }
+    : { state },
+);
 ```
+
+More: [Overview](./docs/guides/overview.md), [Composition](./docs/guides/composition.md)
 
 ### Rendering
 
-Rendering is the external view - data + callbacks. No UI framework specifics:
+Rendering is the framework-agnostic view model (data + callbacks):
 
 ```typescript
-render: (props, state, ctx) => ({
-  title: state.draft,
-  isSaving: state.type === 'saving',
-  onSave: () => ctx.actionSink.send(/* ... */),
-}),
+render: (_props, state, ctx) => {
+  switch (state.type) {
+    case 'loading':
+      return { type: 'loading' };
+    case 'loaded':
+      return { type: 'loaded', name: state.name };
+    case 'error':
+      return { type: 'error', message: state.message };
+  }
+},
 ```
+
+More: [Overview](./docs/guides/overview.md), [React Integration](./docs/guides/react.md)
 
 ### Workers
 
-Workers handle async operations with automatic lifecycle management:
+Workers run async tasks and are started/stopped by render calls:
 
 ```typescript
-import { createWorker } from '@workflow-ts/core';
-
-const saveWorker = createWorker('save', async (signal) => {
-  const response = await fetch('/api/save', { signal });
-  return response.json();
-});
-
-// In render:
-ctx.runWorker(saveWorker, 'save-key', (result) => (state) => ({
-  state: { type: 'saved', publishedAt: result.timestamp },
-}));
+if (state.type === 'loading') {
+  ctx.runWorker(loadProfileWorker, 'profile-load', (result) => () => ({
+    state: result.ok
+      ? { type: 'loaded', name: result.name }
+      : { type: 'error', message: result.message },
+  }));
+}
 ```
 
-Workers start when called in render, stop when not called. This makes cleanup automatic.
+More: [Workers](./docs/guides/workers.md)
 
 ### Composition
 
-Workflows compose as trees. Parent workflows render children:
+Parents render children and map child outputs back into parent actions:
 
 ```typescript
-render: (props, state, ctx) => ({
-  // Render child workflow
-  child: ctx.renderChild(childWorkflow, childProps, 'child-key', (childOutput) => (state) => ({
-    state: handleChildOutput(state, childOutput),
-  })),
-}),
+const child = ctx.renderChild(childWorkflow, childProps, 'child-key', (output) => (state) => ({
+  state,
+  output,
+}));
 ```
+
+More: [Composition & Child Workflows](./docs/guides/composition.md)
+
+### Snapshots
+
+You can persist and restore workflow state with `snapshot`/`restore`:
+
+```typescript
+snapshot: (state) => JSON.stringify(state),
+restore: (snapshot) => JSON.parse(snapshot),
+```
+
+More: [Snapshots](./docs/guides/snapshots.md)
+
+## Documentation Map
+
+Start here: [Documentation Index](./docs/index.md)
+
+### Getting Started
+
+- [Overview](./docs/guides/overview.md)
+- [React Integration](./docs/guides/react.md)
+
+### Workflow Mechanics
+
+- [Composition & Child Workflows](./docs/guides/composition.md)
+- [Workers](./docs/guides/workers.md)
+
+### Reliability
+
+- [Testing](./docs/guides/testing.md)
+- [Snapshots](./docs/guides/snapshots.md)
 
 ## Examples
 
-See the [`examples/`](./examples) directory:
+See [examples/](./examples):
 
-- **Counter** - Basic state and actions
+- [README Profile](./examples/readme-profile/README.md) - runnable source-of-truth for the Quick Start snippets
+- [Counter](./examples/counter/README.md) - minimal state/action workflow
 
-## Documentation
+## Package References
 
-- [Core API Reference](./packages/core/README.md)
-- [React Integration](./packages/react/README.md)
-- [Large Root Workflow Pattern](./docs/guides/large-root-workflow.md)
-
-## Comparison
-
-| Feature                 | workflow-ts | Redux           | XState        | Zustand     |
-| ----------------------- | ----------- | --------------- | ------------- | ----------- |
-| State machine explicit  | ✅          | ❌              | ✅            | ❌          |
-| Zero boilerplate        | ⚠️          | ⚠️              | ⚠️            | ✅          |
-| Async built-in          | ✅          | ⚠️              | ✅            | ⚠️          |
-| Framework agnostic      | ✅          | ✅              | ✅            | ✅          |
-| First-class composition | ✅          | ⚠️              | ✅            | ⚠️          |
-| TypeScript native       | ✅          | ⚠️              | ✅            | ✅          |
-
-Legend: ✅ first-class, ⚠️ supported with patterns/add-ons, ❌ not a core model.
+- [@workflow-ts/core API](./packages/core/README.md)
+- [@workflow-ts/react API](./packages/react/README.md)
 
 ## Development
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Run tests
 pnpm test
-
-# Build all packages
 pnpm build
-
-# Type check
 pnpm typecheck
-
-# Run all checks
 pnpm ci
 ```
 
 ## Acknowledgments
 
-Inspired by Square's [Workflow library](https://github.com/square/workflow-kotlin) and [Point-Free's TCA](https://github.com/pointfreeco/swift-composable-architecture).
+Inspired by Square's [Workflow library](https://github.com/square/workflow-kotlin) and Point-Free's [TCA](https://github.com/pointfreeco/swift-composable-architecture).
 
 ## License
 

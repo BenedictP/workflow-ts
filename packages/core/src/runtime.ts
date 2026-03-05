@@ -408,11 +408,13 @@ export class WorkflowRuntime<P, S, O, R> {
 
     try {
       this.processAction(action);
-      while (!this.disposed) {
-        // Only shift when active so disposal cannot mutate the queue as a side effect of loop control flow.
-        const next = this.actionQueue.shift();
-        if (next === undefined) break;
+      if (this.isDisposed()) return;
+      // Shift before each iteration and stop on empty queue.
+      let next = this.actionQueue.shift();
+      while (next !== undefined) {
         this.processAction(next);
+        if (this.isDisposed()) break;
+        next = this.actionQueue.shift();
       }
     } catch (error) {
       this.debug?.('error', 'Error processing action', error);

@@ -474,11 +474,11 @@ describe('Props updates', () => {
       readonly stateValue: string;
     }
 
-    const observedPropsChanges: Array<{
+    const observedPropsChanges: {
       readonly oldProps: string;
       readonly newProps: string;
       readonly stateValue: string;
-    }> = [];
+    }[] = [];
 
     const workflow: Workflow<string, PropsWorkflowState, never, Rendering> = {
       initialState: (props) => ({ lastPropsValue: `initial:${props}` }),
@@ -524,7 +524,7 @@ describe('Props updates', () => {
   });
 
   it('should pass sequential old/new props to onPropsChanged across updates', () => {
-    const observedPropsChanges: Array<{ readonly oldProps: string; readonly newProps: string }> = [];
+    const observedPropsChanges: { readonly oldProps: string; readonly newProps: string }[] = [];
 
     const workflow: Workflow<string, { readonly value: string }, never, { readonly value: string }> = {
       initialState: (props) => ({ value: props }),
@@ -591,7 +591,7 @@ describe('Props updates', () => {
   });
 
   it('should use custom propsEqual to force props updates and onPropsChanged', () => {
-    const observedPropsChanges: Array<{ readonly oldProps: string; readonly newProps: string }> = [];
+    const observedPropsChanges: { readonly oldProps: string; readonly newProps: string }[] = [];
 
     const workflow: Workflow<string, { readonly value: number }, never, { readonly value: number }> = {
       initialState: () => ({ value: 0 }),
@@ -628,7 +628,7 @@ describe('Props updates', () => {
       readonly step: number;
     }
 
-    const observedPropsChanges: Array<{ readonly oldStep: number; readonly newStep: number }> = [];
+    const observedPropsChanges: { readonly oldStep: number; readonly newStep: number }[] = [];
 
     const workflow: Workflow<UserProps, { readonly step: number }, never, { readonly step: number }> = {
       initialState: (props) => ({ step: props.step }),
@@ -787,7 +787,7 @@ describe('Child workflow lifecycle', () => {
       readonly childValue: number;
     }
 
-    const childPropsChanges: Array<{ readonly oldValue: number; readonly newValue: number }> = [];
+    const childPropsChanges: { readonly oldValue: number; readonly newValue: number }[] = [];
 
     const childWithPropsHook: Workflow<
       { readonly value: number },

@@ -1,73 +1,192 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run publish steps in dry-run mode only
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.versions.outputs.release_version }}
+      release_tag: ${{ steps.versions.outputs.release_tag }}
+      release_sha: ${{ steps.versions.outputs.release_sha }}
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v6
-      
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         run: pnpm build
-      
+
+      - name: Verify npm supports trusted publishing
+        run: |
+          npm --version
+          node -e "const [major,minor,patch]=process.versions.npm.split('.').map(Number); const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))); if(!ok){console.error('npm 11.5.1+ is required for trusted publishing.'); process.exit(1);}"
+
+      - name: Read and validate package versions
+        id: versions
+        run: |
+          CORE_VERSION="$(node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync('packages/core/package.json', 'utf8')).version)")"
+          REACT_VERSION="$(node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync('packages/react/package.json', 'utf8')).version)")"
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          if [ "$CORE_VERSION" != "$REACT_VERSION" ]; then
+            echo "Package versions must match for a single repo release tag."
+            echo "@workflow-ts/core=$CORE_VERSION"
+            echo "@workflow-ts/react=$REACT_VERSION"
+            exit 1
+          fi
+          RELEASE_TAG="v$CORE_VERSION"
+          echo "CORE_VERSION=$CORE_VERSION" >> "$GITHUB_ENV"
+          echo "REACT_VERSION=$REACT_VERSION" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "release_version=$CORE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Preparing release $RELEASE_TAG for @workflow-ts/core@$CORE_VERSION and @workflow-ts/react@$REACT_VERSION"
+
+      - name: Ensure target versions and tag are not already published
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if npm view "@workflow-ts/core@${CORE_VERSION}" version >/dev/null 2>&1; then
+            echo "@workflow-ts/core@${CORE_VERSION} is already published."
+            exit 1
+          fi
+          if npm view "@workflow-ts/react@${REACT_VERSION}" version >/dev/null 2>&1; then
+            echo "@workflow-ts/react@${REACT_VERSION} is already published."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Git tag ${RELEASE_TAG} already exists on origin."
+            exit 1
+          fi
+          echo "Target versions and release tag are available. Continuing."
+
       - name: Publish @workflow-ts/core
+        if: ${{ !inputs.dry_run }}
         working-directory: packages/core
         run: pnpm publish --provenance --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      
+
+      - name: Dry-run @workflow-ts/core
+        if: ${{ inputs.dry_run }}
+        working-directory: packages/core
+        run: pnpm publish --access public --no-git-checks --dry-run
+
       - name: Publish @workflow-ts/react
+        if: ${{ !inputs.dry_run }}
         working-directory: packages/react
         run: pnpm publish --provenance --access public --no-git-checks
+
+      - name: Dry-run @workflow-ts/react
+        if: ${{ inputs.dry_run }}
+        working-directory: packages/react
+        run: pnpm publish --access public --no-git-checks --dry-run
+
+  release:
+    name: Tag main and create GitHub Release
+    runs-on: ubuntu-latest
+    needs: publish
+    if: ${{ needs.publish.result == 'success' && !inputs.dry_run }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create and push release tag
+        run: |
+          RELEASE_TAG="${{ needs.publish.outputs.release_tag }}"
+          RELEASE_SHA="${{ needs.publish.outputs.release_sha }}"
+          git fetch origin main --depth=1
+          if ! git merge-base --is-ancestor "${RELEASE_SHA}" origin/main; then
+            echo "Published commit ${RELEASE_SHA} is not reachable from origin/main."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${RELEASE_TAG} already exists."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${RELEASE_TAG}" "${RELEASE_SHA}" -m "Release ${RELEASE_TAG}"
+          git push origin "${RELEASE_TAG}"
+
+      - name: Create GitHub Release
+        run: |
+          RELEASE_TAG="${{ needs.publish.outputs.release_tag }}"
+          RELEASE_SHA="${{ needs.publish.outputs.release_sha }}"
+          gh release create "${RELEASE_TAG}" \
+            --verify-tag \
+            --target "${RELEASE_SHA}" \
+            --title "${RELEASE_TAG}" \
+            --generate-notes
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docs:
     name: Deploy Documentation
     runs-on: ubuntu-latest
-    needs: publish
+    needs:
+      - publish
+      - release
+    if: ${{ needs.publish.result == 'success' && needs.release.result == 'success' && !inputs.dry_run }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
-      
+        with:
+          ref: main
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
-      
+          node-version: '24'
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build documentation
         run: pnpm docs:build
-        continue-on-error: true
-      
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:

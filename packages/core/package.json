@@ -1,6 +1,6 @@
 {
   "name": "@workflow-ts/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Core workflow runtime and types",
   "keywords": [
     "workflow",
@@ -12,13 +12,13 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "homepage": "https://github.com/AICodeHelper/workflow-ts#readme",
+  "homepage": "https://github.com/BenedictP/workflow-ts#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AICodeHelper/workflow-ts.git"
+    "url": "git+https://github.com/BenedictP/workflow-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/AICodeHelper/workflow-ts/issues"
+    "url": "https://github.com/BenedictP/workflow-ts/issues"
   },
   "exports": {
     ".": {

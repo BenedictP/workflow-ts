@@ -107,6 +107,18 @@ describe('WorkerManager', () => {
       expect(wasAborted()).toBe(true);
     });
 
+    it('should not call onComplete when worker is stopped', async () => {
+      const { worker } = createAbortTrackingWorker('test');
+      const onComplete = vi.fn();
+      manager.startWorker(worker, 'test', vi.fn(), onComplete);
+
+      manager.stopWorker('test');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(manager.isRunning('test')).toBe(false);
+    });
+
     it('should stop all workers', () => {
       const { worker: w1, wasAborted: w1Aborted } = createAbortTrackingWorker('w1');
       const { worker: w2, wasAborted: w2Aborted } = createAbortTrackingWorker('w2');
@@ -119,6 +131,26 @@ describe('WorkerManager', () => {
       expect(manager.activeWorkerCount).toBe(0);
       expect(w1Aborted()).toBe(true);
       expect(w2Aborted()).toBe(true);
+    });
+
+    it('should catch and log onComplete errors without leaving worker active', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const onCompleteError = new Error('onComplete failed');
+      const worker = createWorker('test', async () => 'done');
+
+      try {
+        manager.startWorker(worker, 'test', vi.fn(), () => {
+          throw onCompleteError;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(manager.isRunning('test')).toBe(false);
+        expect(manager.activeWorkerCount).toBe(0);
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Worker test onComplete error:', onCompleteError);
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
   });
 

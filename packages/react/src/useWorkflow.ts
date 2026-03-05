@@ -49,6 +49,10 @@ interface PropsValidationEnvironment {
   readonly viteMode: unknown;
 }
 
+type OutputHandlers<O> = {
+  [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+};
+
 const comparableAccessorTag = Symbol('workflowComparableAccessor');
 const allowedPropsDescription =
   'primitives, functions, Array, plain object, Date, Map, Set, ArrayBuffer, DataView, TypedArray';
@@ -170,7 +174,9 @@ const assertSupportedProps = (value: unknown, path = 'props', seen = new WeakSet
   }
 };
 
-const cloneRuntimeValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
+type CloneMode = 'runtime' | 'comparable';
+
+const cloneValue = (value: unknown, mode: CloneMode, seen = new WeakMap<object, unknown>()): unknown => {
   if (value === null || value === undefined) return value;
   if (typeof value === 'function') return value;
   if (!isObjectLike(value)) return value;
@@ -182,7 +188,7 @@ const cloneRuntimeValue = (value: unknown, seen = new WeakMap<object, unknown>()
     const clone: unknown[] = [];
     seen.set(value, clone);
     for (const item of value) {
-      clone.push(cloneRuntimeValue(item, seen));
+      clone.push(cloneValue(item, mode, seen));
     }
     return clone;
   }
@@ -191,7 +197,7 @@ const cloneRuntimeValue = (value: unknown, seen = new WeakMap<object, unknown>()
     const clone = new Map<unknown, unknown>();
     seen.set(value, clone);
     for (const [key, mapValue] of value.entries()) {
-      clone.set(cloneRuntimeValue(key, seen), cloneRuntimeValue(mapValue, seen));
+      clone.set(cloneValue(key, mode, seen), cloneValue(mapValue, mode, seen));
     }
     return clone;
   }
@@ -200,7 +206,7 @@ const cloneRuntimeValue = (value: unknown, seen = new WeakMap<object, unknown>()
     const clone = new Set<unknown>();
     seen.set(value, clone);
     for (const setValue of value.values()) {
-      clone.add(cloneRuntimeValue(setValue, seen));
+      clone.add(cloneValue(setValue, mode, seen));
     }
     return clone;
   }
@@ -222,71 +228,21 @@ const cloneRuntimeValue = (value: unknown, seen = new WeakMap<object, unknown>()
     return value;
   }
 
-  const prototype = Object.getPrototypeOf(value) as object | null;
-  const clone = Object.create(prototype) as Record<string | symbol, unknown>;
-  seen.set(value, clone);
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor) continue;
-    if ('value' in descriptor) {
-      descriptor.value = cloneRuntimeValue(descriptor.value, seen);
-    }
-    Object.defineProperty(clone, key, descriptor);
-  }
-
-  return clone;
-};
-
-const cloneComparableValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
-  if (value === null || value === undefined) return value;
-  if (typeof value === 'function') return value;
-  if (!isObjectLike(value)) return value;
-  if (seen.has(value)) return seen.get(value);
-
-  if (value instanceof Date) return new Date(value.getTime());
-
-  if (Array.isArray(value)) {
-    const clone: unknown[] = [];
+  if (mode === 'runtime') {
+    const prototype = Object.getPrototypeOf(value) as object | null;
+    const clone = Object.create(prototype) as Record<string | symbol, unknown>;
     seen.set(value, clone);
-    for (const item of value) {
-      clone.push(cloneComparableValue(item, seen));
+
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor) continue;
+      if ('value' in descriptor) {
+        descriptor.value = cloneValue(descriptor.value, mode, seen);
+      }
+      Object.defineProperty(clone, key, descriptor);
     }
+
     return clone;
-  }
-
-  if (value instanceof Map) {
-    const clone = new Map<unknown, unknown>();
-    seen.set(value, clone);
-    for (const [key, mapValue] of value.entries()) {
-      clone.set(cloneComparableValue(key, seen), cloneComparableValue(mapValue, seen));
-    }
-    return clone;
-  }
-
-  if (value instanceof Set) {
-    const clone = new Set<unknown>();
-    seen.set(value, clone);
-    for (const setValue of value.values()) {
-      clone.add(cloneComparableValue(setValue, seen));
-    }
-    return clone;
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    if (value instanceof DataView) {
-      const cloneBuffer = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
-      return new DataView(cloneBuffer);
-    }
-    return new (value.constructor as new (input: ArrayBufferView) => unknown)(value);
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return value.slice(0);
-  }
-
-  if (!isPlainObject(value)) {
-    seen.set(value, value);
-    return value;
   }
 
   const clone = Object.create(null) as Record<PropertyKey, unknown>;
@@ -297,7 +253,7 @@ const cloneComparableValue = (value: unknown, seen = new WeakMap<object, unknown
     if (!descriptor) continue;
 
     if ('value' in descriptor) {
-      clone[key] = cloneComparableValue(descriptor.value, seen);
+      clone[key] = cloneValue(descriptor.value, mode, seen);
       continue;
     }
 
@@ -310,6 +266,10 @@ const cloneComparableValue = (value: unknown, seen = new WeakMap<object, unknown
 
   return clone;
 };
+
+const cloneRuntimeValue = (value: unknown): unknown => cloneValue(value, 'runtime');
+
+const cloneComparableValue = (value: unknown): unknown => cloneValue(value, 'comparable');
 
 const deepEqual = (a: unknown, b: unknown, seen = new WeakMap<object, object>()): boolean => {
   if (Object.is(a, b)) return true;
@@ -353,12 +313,17 @@ const deepEqual = (a: unknown, b: unknown, seen = new WeakMap<object, object>())
     if (!(a instanceof Set) || !(b instanceof Set)) return false;
     if (a.size !== b.size) return false;
 
-    const bValues: unknown[] = [...b.values()];
-    let index = 0;
+    const unmatchedValues: unknown[] = [...b.values()];
     for (const aValue of a.values()) {
-      const bValue = bValues[index];
-      if (!deepEqual(aValue, bValue, seen)) return false;
-      index += 1;
+      let matchedIndex = -1;
+      for (let i = 0; i < unmatchedValues.length; i += 1) {
+        if (deepEqual(aValue, unmatchedValues[i], new WeakMap<object, object>())) {
+          matchedIndex = i;
+          break;
+        }
+      }
+      if (matchedIndex === -1) return false;
+      unmatchedValues.splice(matchedIndex, 1);
     }
     return true;
   }
@@ -433,310 +398,45 @@ const getUpdatedPropsSnapshot = (snapshot: PropsSnapshot, nextProps: unknown): P
   };
 };
 
-/**
- * Hook to use a workflow in a React component.
- *
- * @param workflow - The workflow definition
- * @param props - Props to pass to the workflow
- * @param onOutput - Optional callback for workflow outputs
- * @returns The current rendering
- *
- * @example
- * ```tsx
- * const counter = useWorkflow(counterWorkflow, undefined);
- * return (
- *   <div>
- *     <span>{counter.count}</span>
- *     <button onClick={counter.onIncrement}>+</button>
- *     <button onClick={counter.onDecrement}>-</button>
- *   </div>
- * );
- * ```
- */
-export interface UseWorkflowHookOptions<O> {
-  /** Reset runtime when workflow identity changes (opt-in) */
-  resetOnWorkflowChange?: boolean;
-  /** Runtime lifecycle mode */
-  lifecycle?: RuntimeLifecycleMode;
-  /** Whether runtime should be active (used with pause-when-backgrounded lifecycle) */
-  isActive?: boolean;
-  /** Optional handlers for specific output types */
-  outputHandlers?: {
-    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
+interface ManagedRuntimeOptions<P extends AllowedProp, S, O, R> {
+  readonly workflow: Workflow<P, S, O, R>;
+  readonly props: P;
+  readonly onOutput?: (output: O) => void;
+  readonly outputHandlers?: OutputHandlers<O>;
+  readonly lifecycle?: RuntimeLifecycleMode;
+  readonly isActive?: boolean;
+  readonly resetOnWorkflowChange?: boolean;
+  readonly hasInactiveSnapshot: boolean;
+  readonly runtimeRef: {
+    current: WorkflowRuntime<P, S, O, R> | null;
   };
+  readonly onStoreRuntimeState?: (runtime: WorkflowRuntime<P, S, O, R>) => void;
 }
 
-export function useWorkflow<P extends AllowedProp, S, O, R>(
-  workflow: Workflow<P, S, O, R>,
-  props: P,
-  onOutput?: (output: O) => void,
-  options?: UseWorkflowHookOptions<O>,
-): R {
-  const onOutputRef = useRef(onOutput);
-  onOutputRef.current = onOutput;
-  const lastRenderingRef = useRef<R | null>(null);
-  const lastSyncedPropsRef = useRef<PropsSnapshot>(createPropsSnapshot(props));
-
-  const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
-  const pendingDisposalsRef = useRef(new Map<WorkflowRuntime<P, S, O, R>, ReturnType<typeof setTimeout>>());
-  const workflowRef = useRef(workflow);
-  const lifecycle = options?.lifecycle ?? 'always-on';
-  const shouldBeActive = lifecycle === 'pause-when-backgrounded' ? options?.isActive ?? true : true;
-  const previousActiveRef = useRef(shouldBeActive);
-  const workflowChanged = workflowRef.current !== workflow;
-  const shouldCreateRuntime = shouldBeActive || (runtimeRef.current === null && lastRenderingRef.current === null);
-
-  // Create a new runtime when needed:
-  // 1. First render
-  // 2. Previous runtime was disposed (e.g. StrictMode effect replay)
-  // 3. Workflow identity changed and resetOnWorkflowChange is enabled
-  const needsNewRuntime =
-    shouldCreateRuntime &&
-    (
-      runtimeRef.current === null ||
-      runtimeRef.current.isDisposed() ||
-      (options?.resetOnWorkflowChange === true && workflowChanged)
-    );
-
-  if (needsNewRuntime) {
-    const propsSnapshot = createPropsSnapshot(props);
-    runtimeRef.current = createRuntime(workflow, propsSnapshot.runtimeValue as P, {
-      onOutput: (output: O) => {
-        onOutputRef.current?.(output);
-      },
-    });
-    lastSyncedPropsRef.current = propsSnapshot;
-  }
-  workflowRef.current = workflow;
-
-  const runtime = runtimeRef.current;
-  const scheduleDispose = useCallback((runtimeToDispose: WorkflowRuntime<P, S, O, R>) => {
-    if (runtimeToDispose.isDisposed()) return;
-    if (pendingDisposalsRef.current.has(runtimeToDispose)) return;
-
-    const timerId = setTimeout(() => {
-      pendingDisposalsRef.current.delete(runtimeToDispose);
-      if (!runtimeToDispose.isDisposed()) {
-        runtimeToDispose.dispose();
-      }
-      if (runtimeRef.current === runtimeToDispose) {
-        runtimeRef.current = null;
-      }
-    }, 0);
-
-    pendingDisposalsRef.current.set(runtimeToDispose, timerId);
-  }, []);
-  const cancelPendingDispose = useCallback((runtimeToKeep: WorkflowRuntime<P, S, O, R>) => {
-    const timerId = pendingDisposalsRef.current.get(runtimeToKeep);
-    if (timerId === undefined) return;
-    clearTimeout(timerId);
-    pendingDisposalsRef.current.delete(runtimeToKeep);
-  }, []);
-
-  // Register typed output handlers with proper cleanup
-  useEffect(() => {
-    if (runtime === null || runtime.isDisposed() || !shouldBeActive) return;
-
-    const handlers = options?.outputHandlers;
-    if (!handlers) return;
-
-    const unsubscribes: (() => void)[] = [];
-
-    // Object.entries loses type correlation between key and handler, so we cast.
-    // When K is inferred as the full OutputType union, Extract<O, { type: OutputType }>
-    // resolves to all of O — every handler appears to accept all variants. This is
-    // unavoidable with Object.entries but safe: outputHandlers is typed to only allow
-    // valid pairs, and runtime.on only calls each handler with its matching output type.
-    type OutputType = O extends { type: string } ? O['type'] : never;
-    for (const [type, handler] of Object.entries(handlers)) {
-      if (handler !== undefined) {
-        const unsubscribe = runtime.on(
-          type as OutputType,
-          handler as (output: Extract<O, { type: OutputType }>) => void
-        );
-        unsubscribes.push(unsubscribe);
-      }
-    }
-
-    return () => {
-      unsubscribes.forEach((unsubscribe) => {
-        unsubscribe();
-      });
-    };
-  }, [runtime, options?.outputHandlers, shouldBeActive]);
-
-  // Dispose this runtime when it is replaced or the component unmounts.
-  useEffect(() => {
-    if (runtime === null) {
-      previousActiveRef.current = shouldBeActive;
-      return;
-    }
-
-    const wasActive = previousActiveRef.current;
-    previousActiveRef.current = shouldBeActive;
-    const transitionedToInactive = wasActive && !shouldBeActive;
-
-    if (transitionedToInactive) {
-      cancelPendingDispose(runtime);
-      if (!runtime.isDisposed()) {
-        lastRenderingRef.current = runtime.getRendering();
-        runtime.dispose();
-      }
-      if (runtimeRef.current === runtime) {
-        runtimeRef.current = null;
-      }
-      return;
-    }
-
-    if (shouldBeActive) {
-      // StrictMode effect replay cleanup schedules disposal. Setup for the same runtime
-      // immediately cancels that pending disposal.
-      cancelPendingDispose(runtime);
-    } else {
-      if (!runtime.isDisposed()) {
-        lastRenderingRef.current = runtime.getRendering();
-      }
-      scheduleDispose(runtime);
-    }
-
-    return () => {
-      // If this effect is cleaning up a runtime that has already been replaced,
-      // dispose immediately to avoid one-tick stale runtime activity.
-      if (runtimeRef.current !== runtime) {
-        cancelPendingDispose(runtime);
-        if (!runtime.isDisposed()) {
-          runtime.dispose();
-        }
-        return;
-      }
-      scheduleDispose(runtime);
-    };
-  }, [runtime, shouldBeActive, scheduleDispose, cancelPendingDispose]);
-
-  // Intentionally run after every render so deep mutations in supported prop
-  // shapes are detected even when React reference equality is unchanged.
-  useEffect(() => {
-    if (runtime === null || runtime.isDisposed() || !shouldBeActive) return;
-    const propsSnapshot = getUpdatedPropsSnapshot(lastSyncedPropsRef.current, props);
-    if (propsSnapshot === null) return;
-    lastSyncedPropsRef.current = propsSnapshot;
-    runtime.updateProps(propsSnapshot.runtimeValue as P);
-  });
-
-  const subscribe = useCallback(
-    (listener: () => void) => {
-      if (!shouldBeActive || runtime === null || runtime.isDisposed()) {
-        return () => undefined;
-      }
-      return runtime.subscribe(listener);
-    },
-    [runtime, shouldBeActive]
-  );
-  const getRenderingSnapshot = useCallback(() => {
-    if (shouldBeActive) {
-      if (runtime === null || runtime.isDisposed()) {
-        throw new Error('Workflow runtime is not available');
-      }
-      const rendering = runtime.getRendering();
-      lastRenderingRef.current = rendering;
-      return rendering;
-    }
-
-    if (runtime !== null && !runtime.isDisposed()) {
-      const rendering = runtime.getRendering();
-      lastRenderingRef.current = rendering;
-      return rendering;
-    }
-
-    if (lastRenderingRef.current !== null) {
-      return lastRenderingRef.current;
-    }
-
-    throw new Error('Workflow rendering is not available while inactive');
-  }, [runtime, shouldBeActive]);
-
-  // Subscribe to rendering changes
-  return useSyncExternalStore(subscribe, getRenderingSnapshot, getRenderingSnapshot);
+interface ManagedRuntimeResult<P extends AllowedProp, S, O, R> {
+  readonly runtime: WorkflowRuntime<P, S, O, R> | null;
+  readonly shouldBeActive: boolean;
 }
 
-/**
- * Hook options for useWorkflowWithState
- */
-export interface UseWorkflowOptions<P extends AllowedProp, O> {
-  /** Initial props for the workflow */
-  props: P;
-  /** Callback for workflow outputs */
-  onOutput?: (output: O) => void;
-  /** Runtime lifecycle mode */
-  lifecycle?: RuntimeLifecycleMode;
-  /** Whether runtime should be active (used with pause-when-backgrounded lifecycle) */
-  isActive?: boolean;
-  /** Optional handlers for specific output types */
-  outputHandlers?: {
-    [K in O extends { type: string } ? O['type'] : never]?: (output: Extract<O, { type: K }>) => void;
-  };
-  /** Reset runtime when workflow identity changes (opt-in) */
-  resetOnWorkflowChange?: boolean;
-}
-
-/**
- * Hook result that includes both rendering and runtime controls
- */
-export interface UseWorkflowResult<P extends AllowedProp, S, R> {
-  /** Current rendering */
-  rendering: R;
-  /** Current state (for debugging) */
-  state: S;
-  /** Current props */
-  props: P;
-  /** Update props */
-  updateProps: (props: P) => void;
-  /** Snapshot current state */
-  snapshot: () => string | undefined;
-}
-
-/**
- * Hook that returns both rendering and runtime controls.
- *
- * @param workflow - The workflow definition
- * @param options - Hook options
- * @returns Rendering and runtime controls
- *
- * @example
- * ```tsx
- * const { rendering, state, updateProps } = useWorkflowWithState(
- *   searchWorkflow,
- *   { props: { query: '' } }
- * );
- *
- * return (
- *   <div>
- *     <input onChange={(e) => updateProps({ query: e.target.value })} />
- *     <ul>{rendering.results.map(r => <li key={r.id}>{r.name}</li>)}</ul>
- *   </div>
- * );
- * ```
- */
-export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
-  workflow: Workflow<P, S, O, R>,
-  options: UseWorkflowOptions<P, O>,
-): UseWorkflowResult<P, S, R> {
+const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
+  options: ManagedRuntimeOptions<P, S, O, R>,
+): ManagedRuntimeResult<P, S, O, R> => {
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
-  const lastSyncedExternalPropsRef = useRef<PropsSnapshot>(createPropsSnapshot(options.props));
 
-  const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
+  const onStoreRuntimeStateRef = useRef(options.onStoreRuntimeState);
+  onStoreRuntimeStateRef.current = options.onStoreRuntimeState;
+
+  const lastSyncedPropsRef = useRef<PropsSnapshot>(createPropsSnapshot(options.props));
   const pendingDisposalsRef = useRef(new Map<WorkflowRuntime<P, S, O, R>, ReturnType<typeof setTimeout>>());
-  const workflowRef = useRef(workflow);
+  const workflowRef = useRef(options.workflow);
+
   const lifecycle = options.lifecycle ?? 'always-on';
   const shouldBeActive = lifecycle === 'pause-when-backgrounded' ? options.isActive ?? true : true;
-  const shouldBeActiveRef = useRef(shouldBeActive);
-  shouldBeActiveRef.current = shouldBeActive;
   const previousActiveRef = useRef(shouldBeActive);
-  const workflowChanged = workflowRef.current !== workflow;
-  const lastSnapshotRef = useRef<UseWorkflowResult<P, S, R> | null>(null);
-  const lastSnapshotStringRef = useRef<string | undefined>(undefined);
-  const shouldCreateRuntime = shouldBeActive || (runtimeRef.current === null && lastSnapshotRef.current === null);
+  const workflowChanged = workflowRef.current !== options.workflow;
+  const shouldCreateRuntime =
+    shouldBeActive || (options.runtimeRef.current === null && !options.hasInactiveSnapshot);
 
   // Create a new runtime when needed:
   // 1. First render
@@ -745,23 +445,23 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
   const needsNewRuntime =
     shouldCreateRuntime &&
     (
-      runtimeRef.current === null ||
-      runtimeRef.current.isDisposed() ||
+      options.runtimeRef.current === null ||
+      options.runtimeRef.current.isDisposed() ||
       (options.resetOnWorkflowChange === true && workflowChanged)
     );
 
   if (needsNewRuntime) {
     const propsSnapshot = createPropsSnapshot(options.props);
-    runtimeRef.current = createRuntime(workflow, propsSnapshot.runtimeValue as P, {
+    options.runtimeRef.current = createRuntime(options.workflow, propsSnapshot.runtimeValue as P, {
       onOutput: (output: O) => {
         onOutputRef.current?.(output);
       },
     });
-    lastSyncedExternalPropsRef.current = propsSnapshot;
+    lastSyncedPropsRef.current = propsSnapshot;
   }
-  workflowRef.current = workflow;
+  workflowRef.current = options.workflow;
 
-  const runtime = runtimeRef.current;
+  const runtime = options.runtimeRef.current;
   const scheduleDispose = useCallback((runtimeToDispose: WorkflowRuntime<P, S, O, R>) => {
     if (runtimeToDispose.isDisposed()) return;
     if (pendingDisposalsRef.current.has(runtimeToDispose)) return;
@@ -771,45 +471,19 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
       if (!runtimeToDispose.isDisposed()) {
         runtimeToDispose.dispose();
       }
-      if (runtimeRef.current === runtimeToDispose) {
-        runtimeRef.current = null;
+      if (options.runtimeRef.current === runtimeToDispose) {
+        options.runtimeRef.current = null;
       }
     }, 0);
 
     pendingDisposalsRef.current.set(runtimeToDispose, timerId);
-  }, []);
+  }, [options.runtimeRef]);
   const cancelPendingDispose = useCallback((runtimeToKeep: WorkflowRuntime<P, S, O, R>) => {
     const timerId = pendingDisposalsRef.current.get(runtimeToKeep);
     if (timerId === undefined) return;
     clearTimeout(timerId);
     pendingDisposalsRef.current.delete(runtimeToKeep);
   }, []);
-  const safeUpdateProps = useCallback((nextProps: P): void => {
-    if (!shouldBeActiveRef.current) return;
-    const currentRuntime = runtimeRef.current;
-    if (currentRuntime === null || currentRuntime.isDisposed()) return;
-    const propsSnapshot = createPropsSnapshot(nextProps);
-    currentRuntime.updateProps(propsSnapshot.runtimeValue as P);
-  }, []);
-  const safeSnapshot = useCallback((): string | undefined => {
-    const currentRuntime = runtimeRef.current;
-    if (currentRuntime !== null && !currentRuntime.isDisposed()) {
-      const snapshotValue = currentRuntime.snapshot();
-      lastSnapshotStringRef.current = snapshotValue;
-      return snapshotValue;
-    }
-    return lastSnapshotStringRef.current;
-  }, []);
-  const createResultSnapshot = useCallback(
-    (rendering: R, state: S, props: P): UseWorkflowResult<P, S, R> => ({
-      rendering,
-      state,
-      props,
-      updateProps: safeUpdateProps,
-      snapshot: safeSnapshot,
-    }),
-    [safeUpdateProps, safeSnapshot],
-  );
 
   // Register typed output handlers with proper cleanup
   useEffect(() => {
@@ -857,15 +531,11 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
     if (transitionedToInactive) {
       cancelPendingDispose(runtime);
       if (!runtime.isDisposed()) {
-        const rendering = runtime.getRendering();
-        const state = runtime.getState();
-        const props = runtime.getProps();
-        lastSnapshotRef.current = createResultSnapshot(rendering, state, props);
-        lastSnapshotStringRef.current = runtime.snapshot();
+        onStoreRuntimeStateRef.current?.(runtime);
         runtime.dispose();
       }
-      if (runtimeRef.current === runtime) {
-        runtimeRef.current = null;
+      if (options.runtimeRef.current === runtime) {
+        options.runtimeRef.current = null;
       }
       return;
     }
@@ -876,11 +546,7 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
       cancelPendingDispose(runtime);
     } else {
       if (!runtime.isDisposed()) {
-        const rendering = runtime.getRendering();
-        const state = runtime.getState();
-        const props = runtime.getProps();
-        lastSnapshotRef.current = createResultSnapshot(rendering, state, props);
-        lastSnapshotStringRef.current = runtime.snapshot();
+        onStoreRuntimeStateRef.current?.(runtime);
       }
       scheduleDispose(runtime);
     }
@@ -888,7 +554,7 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
     return () => {
       // If this effect is cleaning up a runtime that has already been replaced,
       // dispose immediately to avoid one-tick stale runtime activity.
-      if (runtimeRef.current !== runtime) {
+      if (options.runtimeRef.current !== runtime) {
         cancelPendingDispose(runtime);
         if (!runtime.isDisposed()) {
           runtime.dispose();
@@ -897,17 +563,219 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
       }
       scheduleDispose(runtime);
     };
-  }, [runtime, shouldBeActive, scheduleDispose, cancelPendingDispose, createResultSnapshot]);
+  }, [runtime, shouldBeActive, scheduleDispose, cancelPendingDispose, options.runtimeRef]);
 
   // Intentionally run after every render so deep mutations in supported prop
   // shapes are detected even when React reference equality is unchanged.
   useEffect(() => {
     if (runtime === null || runtime.isDisposed() || !shouldBeActive) return;
-    const propsSnapshot = getUpdatedPropsSnapshot(lastSyncedExternalPropsRef.current, options.props);
+    const propsSnapshot = getUpdatedPropsSnapshot(lastSyncedPropsRef.current, options.props);
     if (propsSnapshot === null) return;
-    lastSyncedExternalPropsRef.current = propsSnapshot;
+    lastSyncedPropsRef.current = propsSnapshot;
     runtime.updateProps(propsSnapshot.runtimeValue as P);
   });
+
+  return {
+    runtime,
+    shouldBeActive,
+  };
+};
+
+/**
+ * Hook to use a workflow in a React component.
+ *
+ * @param workflow - The workflow definition
+ * @param props - Props to pass to the workflow
+ * @param onOutput - Optional callback for workflow outputs
+ * @returns The current rendering
+ *
+ * @example
+ * ```tsx
+ * const counter = useWorkflow(counterWorkflow, undefined);
+ * return (
+ *   <div>
+ *     <span>{counter.count}</span>
+ *     <button onClick={counter.onIncrement}>+</button>
+ *     <button onClick={counter.onDecrement}>-</button>
+ *   </div>
+ * );
+ * ```
+ */
+interface WorkflowRuntimeOptions<O> {
+  /** Runtime lifecycle mode */
+  lifecycle?: RuntimeLifecycleMode;
+  /** Whether runtime should be active (used with pause-when-backgrounded lifecycle) */
+  isActive?: boolean;
+  /** Optional handlers for specific output types */
+  outputHandlers?: OutputHandlers<O>;
+  /** Reset runtime when workflow identity changes (opt-in) */
+  resetOnWorkflowChange?: boolean;
+}
+
+export interface UseWorkflowHookOptions<O> extends WorkflowRuntimeOptions<O> {}
+
+export function useWorkflow<P extends AllowedProp, S, O, R>(
+  workflow: Workflow<P, S, O, R>,
+  props: P,
+  onOutput?: (output: O) => void,
+  options?: UseWorkflowHookOptions<O>,
+): R {
+  const lastRenderingRef = useRef<R | null>(null);
+  const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
+  const storeRuntimeState = useCallback((runtimeToStore: WorkflowRuntime<P, S, O, R>) => {
+    lastRenderingRef.current = runtimeToStore.getRendering();
+  }, []);
+  const { runtime, shouldBeActive } = useManagedWorkflowRuntime({
+    workflow,
+    props,
+    onOutput,
+    outputHandlers: options?.outputHandlers,
+    lifecycle: options?.lifecycle,
+    isActive: options?.isActive,
+    resetOnWorkflowChange: options?.resetOnWorkflowChange,
+    hasInactiveSnapshot: lastRenderingRef.current !== null,
+    runtimeRef,
+    onStoreRuntimeState: storeRuntimeState,
+  });
+
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!shouldBeActive || runtime === null || runtime.isDisposed()) {
+        return () => undefined;
+      }
+      return runtime.subscribe(listener);
+    },
+    [runtime, shouldBeActive]
+  );
+  const getRenderingSnapshot = useCallback(() => {
+    if (shouldBeActive) {
+      if (runtime === null || runtime.isDisposed()) {
+        throw new Error('Workflow runtime is not available');
+      }
+      const rendering = runtime.getRendering();
+      lastRenderingRef.current = rendering;
+      return rendering;
+    }
+
+    if (runtime !== null && !runtime.isDisposed()) {
+      const rendering = runtime.getRendering();
+      lastRenderingRef.current = rendering;
+      return rendering;
+    }
+
+    if (lastRenderingRef.current !== null) {
+      return lastRenderingRef.current;
+    }
+
+    throw new Error('Workflow rendering is not available while inactive');
+  }, [runtime, shouldBeActive]);
+
+  // Subscribe to rendering changes
+  return useSyncExternalStore(subscribe, getRenderingSnapshot, getRenderingSnapshot);
+}
+
+/**
+ * Hook options for useWorkflowWithState
+ */
+export interface UseWorkflowOptions<P extends AllowedProp, O> extends WorkflowRuntimeOptions<O> {
+  /** Initial props for the workflow */
+  props: P;
+  /** Callback for workflow outputs */
+  onOutput?: (output: O) => void;
+}
+
+/**
+ * Hook result that includes both rendering and runtime controls
+ */
+export interface UseWorkflowResult<P extends AllowedProp, S, R> {
+  /** Current rendering */
+  rendering: R;
+  /** Current state (for debugging) */
+  state: S;
+  /** Current props */
+  props: P;
+  /** Update props */
+  updateProps: (props: P) => void;
+  /** Snapshot current state */
+  snapshot: () => string | undefined;
+}
+
+/**
+ * Hook that returns both rendering and runtime controls.
+ *
+ * @param workflow - The workflow definition
+ * @param options - Hook options
+ * @returns Rendering and runtime controls
+ *
+ * @example
+ * ```tsx
+ * const { rendering, state, updateProps } = useWorkflowWithState(
+ *   searchWorkflow,
+ *   { props: { query: '' } }
+ * );
+ *
+ * return (
+ *   <div>
+ *     <input onChange={(e) => updateProps({ query: e.target.value })} />
+ *     <ul>{rendering.results.map(r => <li key={r.id}>{r.name}</li>)}</ul>
+ *   </div>
+ * );
+ * ```
+ */
+export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
+  workflow: Workflow<P, S, O, R>,
+  options: UseWorkflowOptions<P, O>,
+): UseWorkflowResult<P, S, R> {
+  const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
+  const lastSnapshotRef = useRef<UseWorkflowResult<P, S, R> | null>(null);
+  const lastSnapshotStringRef = useRef<string | undefined>(undefined);
+  const shouldBeActiveRef = useRef(true);
+  const safeUpdateProps = useCallback((nextProps: P): void => {
+    if (!shouldBeActiveRef.current) return;
+    const currentRuntime = runtimeRef.current;
+    if (currentRuntime === null || currentRuntime.isDisposed()) return;
+    const propsSnapshot = createPropsSnapshot(nextProps);
+    currentRuntime.updateProps(propsSnapshot.runtimeValue as P);
+  }, []);
+  const safeSnapshot = useCallback((): string | undefined => {
+    const currentRuntime = runtimeRef.current;
+    if (currentRuntime !== null && !currentRuntime.isDisposed()) {
+      const snapshotValue = currentRuntime.snapshot();
+      lastSnapshotStringRef.current = snapshotValue;
+      return snapshotValue;
+    }
+    return lastSnapshotStringRef.current;
+  }, []);
+  const createResultSnapshot = useCallback(
+    (rendering: R, state: S, props: P): UseWorkflowResult<P, S, R> => ({
+      rendering,
+      state,
+      props,
+      updateProps: safeUpdateProps,
+      snapshot: safeSnapshot,
+    }),
+    [safeUpdateProps, safeSnapshot],
+  );
+  const storeRuntimeState = useCallback((runtimeToStore: WorkflowRuntime<P, S, O, R>): void => {
+    const rendering = runtimeToStore.getRendering();
+    const state = runtimeToStore.getState();
+    const props = runtimeToStore.getProps();
+    lastSnapshotRef.current = createResultSnapshot(rendering, state, props);
+    lastSnapshotStringRef.current = runtimeToStore.snapshot();
+  }, [createResultSnapshot]);
+  const { runtime, shouldBeActive } = useManagedWorkflowRuntime({
+    workflow,
+    props: options.props,
+    onOutput: options.onOutput,
+    outputHandlers: options.outputHandlers,
+    lifecycle: options.lifecycle,
+    isActive: options.isActive,
+    resetOnWorkflowChange: options.resetOnWorkflowChange,
+    hasInactiveSnapshot: lastSnapshotRef.current !== null,
+    runtimeRef,
+    onStoreRuntimeState: storeRuntimeState,
+  });
+  shouldBeActiveRef.current = shouldBeActive;
 
   useEffect(() => {
     if (runtime !== null && !runtime.isDisposed()) {

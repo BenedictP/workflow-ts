@@ -539,11 +539,14 @@ export class WorkflowRuntime<P, S, O, R> {
     } else {
       // Update props if child already exists - this allows child to react to prop changes
       child.updateProps(props);
-      if (handler !== undefined) {
-        this.updateOutputHandler(childKey, (output) => {
-          this.handleAction(handler(output as CO));
-        });
-      }
+      this.updateOutputHandler(
+        childKey,
+        handler === undefined
+          ? undefined
+          : (output) => {
+              this.handleAction(handler(output as CO));
+            },
+      );
     }
 
     return child.getRendering();

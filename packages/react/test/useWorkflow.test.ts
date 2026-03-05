@@ -320,6 +320,123 @@ describe('useWorkflow', () => {
     unmount();
   });
 
+  it('should treat sets with equal primitive members as unchanged regardless of insertion order', () => {
+    interface SetProps {
+      readonly tags: Set<string>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+    }
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: () => ({
+        renderCount: ++renderCount,
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      { initialProps: { props: { tags: new Set(['a', 'b']) } } },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+
+    rerender({ props: { tags: new Set(['b', 'a']) } });
+    expect(result.current.renderCount).toBe(1);
+
+    unmount();
+  });
+
+  it('should update when set membership changes', () => {
+    interface SetProps {
+      readonly tags: Set<string>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+      readonly size: number;
+    }
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: (props) => ({
+        renderCount: ++renderCount,
+        size: props.tags.size,
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      { initialProps: { props: { tags: new Set(['a', 'b']) } } },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+    expect(result.current.size).toBe(2);
+
+    rerender({ props: { tags: new Set(['a', 'b', 'c']) } });
+    expect(result.current.renderCount).toBe(2);
+    expect(result.current.size).toBe(3);
+
+    unmount();
+  });
+
+  it('should treat sets of structural objects as unchanged when only insertion order differs', () => {
+    interface TagObject {
+      readonly id: number;
+      readonly meta: {
+        readonly enabled: boolean;
+      };
+    }
+
+    interface SetProps {
+      readonly tags: Set<TagObject>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+    }
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: () => ({
+        renderCount: ++renderCount,
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      {
+        initialProps: {
+          props: {
+            tags: new Set<TagObject>([
+              { id: 1, meta: { enabled: true } },
+              { id: 2, meta: { enabled: false } },
+            ]),
+          },
+        },
+      },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+
+    rerender({
+      props: {
+        tags: new Set<TagObject>([
+          { id: 2, meta: { enabled: false } },
+          { id: 1, meta: { enabled: true } },
+        ]),
+      },
+    });
+    expect(result.current.renderCount).toBe(1);
+
+    unmount();
+  });
+
   it('should sync non-plain and deep prop mutations on same top-level reference', () => {
     const initialTimestamp = new Date('2026-01-01T00:00:00.000Z');
     const mutableProps: ComplexProps = {

@@ -129,7 +129,11 @@ export class WorkerManager {
         if (state.status === 'running') {
           state.status = 'completed';
           this.activeWorkers.delete(key);
-          state.onComplete();
+          try {
+            state.onComplete();
+          } catch (error) {
+            console.error(`Worker ${key} onComplete error:`, error);
+          }
         }
       });
   }

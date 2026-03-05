@@ -585,6 +585,59 @@ describe('Child workflow lifecycle', () => {
     runtime.dispose();
   });
 
+  it('should clear child output handler when handler becomes undefined', () => {
+    interface ParentProps {
+      readonly childValue: number;
+      readonly attachHandler: boolean;
+    }
+
+    interface ParentRenderingWithChild {
+      readonly childOutputs: readonly number[];
+      readonly onIncrement: () => void;
+    }
+
+    const handlerChildWorkflow: Workflow<number, ChildState, ChildOutput, ChildRendering> = {
+      initialState: (props) => ({ value: props }),
+      render: (_props, state, ctx) => ({
+        value: state.value,
+        onIncrement: () => {
+          ctx.actionSink.send((s) => ({
+            state: { value: s.value + 1 },
+            output: { type: 'childDone', value: s.value + 1 },
+          }));
+        },
+      }),
+    };
+
+    const parentWorkflow: Workflow<ParentProps, ParentState, never, ParentRenderingWithChild> = {
+      initialState: () => ({ childOutputs: [] }),
+      render: (props, state, ctx) => {
+        const handler = props.attachHandler
+          ? (output: ChildOutput) =>
+              (s: ParentState) => ({
+                state: { childOutputs: [...s.childOutputs, output.value] },
+              })
+          : undefined;
+        const childRendering = ctx.renderChild(handlerChildWorkflow, props.childValue, 'handler-key', handler);
+        return {
+          childOutputs: state.childOutputs,
+          onIncrement: childRendering.onIncrement,
+        };
+      },
+    };
+
+    const runtime = createRuntime(parentWorkflow, { childValue: 0, attachHandler: true });
+
+    runtime.getRendering().onIncrement();
+    expect(runtime.getState().childOutputs).toEqual([1]);
+
+    runtime.updateProps({ childValue: 0, attachHandler: false });
+    runtime.getRendering().onIncrement();
+    expect(runtime.getState().childOutputs).toEqual([1]);
+
+    runtime.dispose();
+  });
+
   it('should use fallback workflow key when workflow is circular', () => {
     const workflow: Workflow<number, { value: number }, never, { value: number }> = {
       initialState: (props) => ({ value: props }),

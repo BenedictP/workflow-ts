@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow-ts Architecture"
+  short_description: "Build deterministic app flows with workflow-ts."
+  default_prompt: "Use $workflow-ts-architecture to design and implement a typed workflow-ts feature with workers, composition, and runtime tests."

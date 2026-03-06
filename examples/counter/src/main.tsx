@@ -3,12 +3,15 @@ import { createRoot } from 'react-dom/client';
 
 import { Counter } from './Counter';
 
-const rootElement = document.getElementById('root');
+const rootElement = (
+  globalThis as {
+    readonly document?: { getElementById: (id: string) => HTMLElement | null };
+  }
+).document?.getElementById('root') ?? null;
 if (rootElement === null) {
   throw new Error('Root element not found');
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 createRoot(rootElement).render(
   <StrictMode>
     <Counter />

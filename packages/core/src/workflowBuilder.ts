@@ -5,7 +5,6 @@ export interface StatefulWorkflowConfig<P, S, O, R> {
   readonly render: (props: P, state: S, context: RenderContext<S, O>) => R;
   readonly onPropsChanged?: (oldProps: P, newProps: P, state: S) => S;
   readonly snapshot?: (state: S) => string;
-  readonly restore?: (snapshot: string) => S;
 }
 
 /**
@@ -30,6 +29,5 @@ export function createStatefulWorkflow<P, S, O, R>(
     render: config.render,
     onPropsChanged: config.onPropsChanged,
     snapshot: config.snapshot,
-    restore: config.restore,
   };
 }

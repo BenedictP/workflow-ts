@@ -113,10 +113,12 @@ interface SnapshotRendering {
 }
 
 const snapshotWorkflow: Workflow<void, SnapshotState, never, SnapshotRendering> = {
-  initialState: () => ({ count: 0, name: 'initial' }),
+  initialState: (_props, snapshot) =>
+    snapshot === undefined
+      ? { count: 0, name: 'initial' }
+      : (JSON.parse(snapshot) as SnapshotState),
   render: (_props, state) => ({ display: `${state.name}: ${state.count}` }),
   snapshot: (state) => JSON.stringify(state),
-  restore: (snapshot) => JSON.parse(snapshot) as SnapshotState,
 };
 
 // ============================================================
@@ -526,7 +528,12 @@ describe('Props updates', () => {
   it('should pass sequential old/new props to onPropsChanged across updates', () => {
     const observedPropsChanges: { readonly oldProps: string; readonly newProps: string }[] = [];
 
-    const workflow: Workflow<string, { readonly value: string }, never, { readonly value: string }> = {
+    const workflow: Workflow<
+      string,
+      { readonly value: string },
+      never,
+      { readonly value: string }
+    > = {
       initialState: (props) => ({ value: props }),
       onPropsChanged: (oldProps, newProps) => {
         observedPropsChanges.push({ oldProps, newProps });
@@ -593,7 +600,12 @@ describe('Props updates', () => {
   it('should use custom propsEqual to force props updates and onPropsChanged', () => {
     const observedPropsChanges: { readonly oldProps: string; readonly newProps: string }[] = [];
 
-    const workflow: Workflow<string, { readonly value: number }, never, { readonly value: number }> = {
+    const workflow: Workflow<
+      string,
+      { readonly value: number },
+      never,
+      { readonly value: number }
+    > = {
       initialState: () => ({ value: 0 }),
       onPropsChanged: (oldProps, newProps, state) => {
         observedPropsChanges.push({ oldProps, newProps });
@@ -630,7 +642,12 @@ describe('Props updates', () => {
 
     const observedPropsChanges: { readonly oldStep: number; readonly newStep: number }[] = [];
 
-    const workflow: Workflow<UserProps, { readonly step: number }, never, { readonly step: number }> = {
+    const workflow: Workflow<
+      UserProps,
+      { readonly step: number },
+      never,
+      { readonly step: number }
+    > = {
       initialState: (props) => ({ step: props.step }),
       onPropsChanged: (oldProps, newProps) => {
         observedPropsChanges.push({ oldStep: oldProps.step, newStep: newProps.step });
@@ -803,17 +820,22 @@ describe('Child workflow lifecycle', () => {
       render: (_props, state) => ({ value: state.value }),
     };
 
-    const parentWorkflow: Workflow<ParentProps, ParentState, never, ParentRenderingWithChildState> = {
-      initialState: () => ({ childOutputs: [] }),
-      render: (props, _state, ctx) => {
-        const child = ctx.renderChild(childWithPropsHook, props.child, 'stable-child');
-        return { childValue: child.value };
-      },
-    };
+    const parentWorkflow: Workflow<ParentProps, ParentState, never, ParentRenderingWithChildState> =
+      {
+        initialState: () => ({ childOutputs: [] }),
+        render: (props, _state, ctx) => {
+          const child = ctx.renderChild(childWithPropsHook, props.child, 'stable-child');
+          return { childValue: child.value };
+        },
+      };
 
-    const runtime = createRuntime(parentWorkflow, { page: 1, child: { value: 10 } }, {
-      propsEqual: (prev, next) => JSON.stringify(prev) === JSON.stringify(next),
-    });
+    const runtime = createRuntime(
+      parentWorkflow,
+      { page: 1, child: { value: 10 } },
+      {
+        propsEqual: (prev, next) => JSON.stringify(prev) === JSON.stringify(next),
+      },
+    );
 
     expect(runtime.getRendering().childValue).toBe(10);
     runtime.updateProps({ page: 2, child: { value: 10 } });
@@ -851,12 +873,16 @@ describe('Child workflow lifecycle', () => {
       initialState: () => ({ childOutputs: [] }),
       render: (props, state, ctx) => {
         const handler = props.attachHandler
-          ? (output: ChildOutput) =>
-              (s: ParentState) => ({
-                state: { childOutputs: [...s.childOutputs, output.value] },
-              })
+          ? (output: ChildOutput) => (s: ParentState) => ({
+              state: { childOutputs: [...s.childOutputs, output.value] },
+            })
           : undefined;
-        const childRendering = ctx.renderChild(handlerChildWorkflow, props.childValue, 'handler-key', handler);
+        const childRendering = ctx.renderChild(
+          handlerChildWorkflow,
+          props.childValue,
+          'handler-key',
+          handler,
+        );
         return {
           childOutputs: state.childOutputs,
           onIncrement: childRendering.onIncrement,
@@ -1145,7 +1171,7 @@ describe('Multiple listeners', () => {
 // Snapshot Tests
 // ============================================================
 
-describe('Snapshot/restore workflow state', () => {
+describe('Snapshot workflow state', () => {
   it('should return undefined when workflow has no snapshot method', () => {
     const workflowNoSnapshot: Workflow<void, { value: number }, never, { value: number }> = {
       initialState: () => ({ value: 0 }),
@@ -1172,10 +1198,15 @@ describe('Snapshot/restore workflow state', () => {
     runtime.dispose();
   });
 
-  it('should restore workflow from snapshot', () => {
-    const restoredState = snapshotWorkflow.restore?.('{"count":5,"name":"restored"}');
+  it('should initialize workflow from snapshot via initialState', () => {
+    const runtime = createRuntime(snapshotWorkflow, undefined, {
+      snapshot: '{"count":5,"name":"restored"}',
+    });
 
-    expect(restoredState).toEqual({ count: 5, name: 'restored' });
+    expect(runtime.getState()).toEqual({ count: 5, name: 'restored' });
+    expect(runtime.getRendering().display).toBe('restored: 5');
+
+    runtime.dispose();
   });
 
   it('should create runtime with initial state from snapshot', () => {
@@ -1773,17 +1804,16 @@ describe('Interceptors', () => {
       expect(calls).toEqual(['int1-send', 'int2-send']);
     });
 
-    it('should call onResult in sequence and allow modification', () => {
+    it('should call onResult in sequence', () => {
+      const calls: string[] = [];
       const int1 = createInterceptor<{ count: number }, unknown>('int1', {
-        onResult: (_action, result) => {
-          result.state = { count: result.state.count + 10 };
-          return result;
+        onResult: () => {
+          calls.push('int1-result');
         },
       });
       const int2 = createInterceptor<{ count: number }, unknown>('int2', {
-        onResult: (_action, result) => {
-          result.state = { count: result.state.count + 5 };
-          return result;
+        onResult: () => {
+          calls.push('int2-result');
         },
       });
 
@@ -1794,7 +1824,40 @@ describe('Interceptors', () => {
         { state: { count: 0 }, props: {}, workflowKey: '' },
       );
 
-      expect(result?.state.count).toBe(16); // 1 + 10 + 5
+      expect(calls).toEqual(['int1-result', 'int2-result']);
+      expect(result).toBeUndefined();
+    });
+
+    it('should call onStateChange in sequence', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        onStateChange: () => {
+          calls.push('int1-state');
+        },
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onStateChange: () => {
+          calls.push('int2-state');
+        },
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onStateChange?.(
+        {
+          reason: 'action',
+          prevState: { count: 0 },
+          nextState: { count: 1 },
+          action: () => ({ state: { count: 1 } }),
+          actionName: 'increment',
+        },
+        {
+          state: { count: 0 },
+          props: {},
+          workflowKey: '',
+        },
+      );
+
+      expect(calls).toEqual(['int1-state', 'int2-state']);
     });
 
     it('should respect filter in composed interceptors', () => {
@@ -1851,12 +1914,70 @@ describe('Interceptors', () => {
       runtime.dispose();
     });
 
+    it('should provide stable non-empty workflowKey for action-driven interceptor hooks', () => {
+      const onSendKeys: string[] = [];
+      const onStateChangeKeys: string[] = [];
+      const interceptor = createInterceptor<{ count: number }, unknown>('workflow-key', {
+        onSend: (_action, context) => {
+          onSendKeys.push(context.workflowKey);
+        },
+        onStateChange: (change, context) => {
+          if (change.reason === 'action') {
+            onStateChangeKeys.push(context.workflowKey);
+          }
+        },
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(onSendKeys).toHaveLength(2);
+      expect(onStateChangeKeys).toHaveLength(2);
+
+      const workflowKey = onSendKeys[0];
+      expect(workflowKey.length).toBeGreaterThan(0);
+      expect(onSendKeys).toEqual([workflowKey, workflowKey]);
+      expect(onStateChangeKeys).toEqual([workflowKey, workflowKey]);
+      runtime.dispose();
+    });
+
+    it('should provide unique workflowKey values for separate runtimes of the same workflow', () => {
+      const runtime1Keys: string[] = [];
+      const runtime2Keys: string[] = [];
+      const interceptor1 = createInterceptor<{ count: number }, unknown>('workflow-key-1', {
+        onSend: (_action, context) => {
+          runtime1Keys.push(context.workflowKey);
+        },
+      });
+      const interceptor2 = createInterceptor<{ count: number }, unknown>('workflow-key-2', {
+        onSend: (_action, context) => {
+          runtime2Keys.push(context.workflowKey);
+        },
+      });
+
+      const runtime1 = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor1] });
+      const runtime2 = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor2] });
+
+      runtime1.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime2.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime1.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime2.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(new Set(runtime1Keys).size).toBe(1);
+      expect(new Set(runtime2Keys).size).toBe(1);
+      expect(runtime1Keys[0].length).toBeGreaterThan(0);
+      expect(runtime2Keys[0].length).toBeGreaterThan(0);
+      expect(runtime1Keys[0]).not.toBe(runtime2Keys[0]);
+      runtime1.dispose();
+      runtime2.dispose();
+    });
+
     it('should call onResult interceptor', () => {
       const calls: { count: number }[] = [];
       const interceptor = createInterceptor<{ count: number }, unknown>('test', {
         onResult: (_action, result) => {
           calls.push(result.state);
-          return result;
         },
       });
 
@@ -1867,19 +1988,168 @@ describe('Interceptors', () => {
       runtime.dispose();
     });
 
-    it('should allow interceptor to modify result', () => {
-      const interceptor = createInterceptor<{ count: number }, unknown>('modifier', {
-        onResult: (_action, result) => {
-          result.state = { count: result.state.count * 2 };
-          return result;
+    it('should call onStateChange for action-driven transitions with metadata', () => {
+      const changes: {
+        readonly prevCount: number;
+        readonly nextCount: number;
+        readonly reason: string;
+        readonly actionName?: string;
+      }[] = [];
+      const namedIncrement = named('increment', (state: { count: number }) => ({
+        state: { count: state.count + 1 },
+      }));
+      const interceptor = createInterceptor<{ count: number }, unknown>('state-change-test', {
+        onStateChange: (change) => {
+          changes.push({
+            prevCount: change.prevState.count,
+            nextCount: change.nextState.count,
+            reason: change.reason,
+            actionName: change.reason === 'action' ? change.actionName : undefined,
+          });
+          if (change.reason === 'action') {
+            expect(change.action).toBe(namedIncrement);
+          }
         },
       });
 
       const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send(namedIncrement);
+
+      expect(changes).toEqual([
+        {
+          prevCount: 0,
+          nextCount: 1,
+          reason: 'action',
+          actionName: 'increment',
+        },
+      ]);
+      runtime.dispose();
+    });
+
+    it('should respect filter for action-driven onStateChange', () => {
+      const calls: string[] = [];
+      const interceptor = createInterceptor<{ count: number }, unknown>('filtered', {
+        filter: () => false,
+        onStateChange: () => {
+          calls.push('state-change');
+        },
+      });
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
+      runtime.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(calls).toEqual([]);
+      runtime.dispose();
+    });
+
+    it('should call onStateChange for props-driven transitions even when filter exists', () => {
+      const observedReasons: string[] = [];
+      const observedActionNames: (string | undefined)[] = [];
+      const workflow: Workflow<
+        string,
+        { readonly value: string },
+        never,
+        { readonly value: string }
+      > = {
+        initialState: (props) => ({ value: props }),
+        onPropsChanged: (_oldProps, newProps) => ({ value: `${newProps}!` }),
+        render: (_props, state) => ({ value: state.value }),
+      };
+      const interceptor = createInterceptor<{ readonly value: string }, never>('props-change', {
+        filter: () => false,
+        onStateChange: (change) => {
+          observedReasons.push(change.reason);
+          observedActionNames.push(change.reason === 'action' ? change.actionName : undefined);
+        },
+      });
+
+      const runtime = createRuntime(workflow, 'a', {
+        interceptors: [interceptor],
+      });
+      runtime.getRendering();
+      runtime.updateProps('b');
+      runtime.getRendering();
+
+      expect(observedReasons).toEqual(['propsChanged']);
+      expect(observedActionNames).toEqual([undefined]);
+      runtime.dispose();
+    });
+
+    it('should provide stable non-empty workflowKey for props-driven state changes', () => {
+      const observedKeys: string[] = [];
+      const workflow: Workflow<
+        string,
+        { readonly value: string },
+        never,
+        { readonly value: string }
+      > = {
+        initialState: (props) => ({ value: props }),
+        onPropsChanged: (_oldProps, newProps) => ({ value: `${newProps}!` }),
+        render: (_props, state) => ({ value: state.value }),
+      };
+      const interceptor = createInterceptor<{ readonly value: string }, never>('props-change-key', {
+        onStateChange: (change, context) => {
+          if (change.reason === 'propsChanged') {
+            observedKeys.push(context.workflowKey);
+          }
+        },
+      });
+
+      const runtime = createRuntime(workflow, 'a', { interceptors: [interceptor] });
+      runtime.getRendering();
+      runtime.updateProps('b');
+      runtime.getRendering();
+      runtime.updateProps('c');
+      runtime.getRendering();
+
+      expect(observedKeys).toHaveLength(2);
+      expect(observedKeys[0].length).toBeGreaterThan(0);
+      expect(observedKeys).toEqual([observedKeys[0], observedKeys[0]]);
+      runtime.dispose();
+    });
+
+    it('should not call onStateChange when state reference is unchanged', () => {
+      const calls: string[] = [];
+      const workflow: Workflow<
+        string,
+        { readonly value: string },
+        never,
+        { readonly value: string }
+      > = {
+        initialState: (props) => ({ value: props }),
+        onPropsChanged: (_oldProps, _newProps, state) => state,
+        render: (_props, state) => ({ value: state.value }),
+      };
+      const interceptor = createInterceptor<{ readonly value: string }, never>('no-change', {
+        onStateChange: () => {
+          calls.push('state-change');
+        },
+      });
+
+      const runtime = createRuntime(workflow, 'x', {
+        interceptors: [interceptor],
+      });
+      runtime.send((state) => ({ state }));
+      runtime.getRendering();
+      runtime.updateProps('y');
+      runtime.getRendering();
+
+      expect(calls).toEqual([]);
+      runtime.dispose();
+    });
+
+    it('should ignore values returned by onResult interceptors', () => {
+      const interceptor = createInterceptor<{ count: number }, unknown>('modifier', {
+        onResult: () => undefined,
+      });
+      interceptor.config.onResult = (() => ({ state: { count: 999 } })) as unknown as (
+        ...args: Parameters<NonNullable<typeof interceptor.config.onResult>>
+      ) => void;
+
+      const runtime = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor] });
       runtime.send((state) => ({ state: { count: state.count + 3 } }));
 
-      // Original action adds 3, but interceptor doubles it
-      expect(runtime.getState()).toEqual({ count: 6 });
+      expect(runtime.getState()).toEqual({ count: 3 });
       runtime.dispose();
     });
 
@@ -1905,16 +2175,14 @@ describe('Interceptors', () => {
       const calls: string[] = [];
       const int1 = createInterceptor<{ count: number }, unknown>('first', {
         onSend: () => calls.push('first'),
-        onResult: (_action, result) => {
+        onResult: () => {
           calls.push('first-result');
-          return result;
         },
       });
       const int2 = createInterceptor<{ count: number }, unknown>('second', {
         onSend: () => calls.push('second'),
-        onResult: (_action, result) => {
+        onResult: () => {
           calls.push('second-result');
-          return result;
         },
       });
 

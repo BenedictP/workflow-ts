@@ -31,7 +31,7 @@ Canonical runnable source: [`examples/readme-profile`](./examples/readme-profile
 
 <!-- README_SNIPPET:workflow:start -->
 ```typescript
-import { createWorker, type Workflow } from '@workflow-ts/core';
+import { createWorker, type Worker, type Workflow } from '@workflow-ts/core';
 
 export interface Props {
   userId: string;
@@ -55,28 +55,46 @@ type LoadProfileResult =
   | { ok: true; name: string }
   | { ok: false; message: string };
 
-const loadProfileWorker = createWorker<LoadProfileResult>('load-profile', async (signal) => {
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => resolve(), 5);
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer);
-      resolve();
-    }, { once: true });
+export interface WorkersProvider {
+  loadProfileWorker: Worker<LoadProfileResult>;
+}
+
+const createLoadProfileWorker = (): Worker<LoadProfileResult> => {
+  return createWorker<LoadProfileResult>('load-profile', async (signal) => {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        resolve();
+      }, 5);
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+    });
+
+    if (signal.aborted) {
+      return { ok: false, message: 'Cancelled' };
+    }
+
+    return { ok: true as const, name: 'Ada' };
   });
+};
 
-  if (signal.aborted) {
-    return { ok: false, message: 'Cancelled' };
-  }
+const defaultWorkersProvider: WorkersProvider = {
+  loadProfileWorker: createLoadProfileWorker(),
+};
 
-  return { ok: true as const, name: 'Ada' };
-});
-
-export const profileWorkflow: Workflow<Props, State, Output, Rendering> = {
+export const createProfileWorkflow = (
+  workersProvider: WorkersProvider = defaultWorkersProvider,
+): Workflow<Props, State, Output, Rendering> => ({
   initialState: () => ({ type: 'loading' }),
 
   render: (_props, state, ctx) => {
     if (state.type === 'loading') {
-      ctx.runWorker(loadProfileWorker, 'profile-load', (result) => () => ({
+      ctx.runWorker(workersProvider.loadProfileWorker, 'profile-load', (result) => () => ({
         state: result.ok
           ? { type: 'loaded', name: result.name }
           : { type: 'error', message: result.message },
@@ -87,29 +105,42 @@ export const profileWorkflow: Workflow<Props, State, Output, Rendering> = {
       case 'loading':
         return {
           type: 'loading',
-          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+          close: () => {
+            ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } }));
+          },
         };
       case 'loaded':
         return {
           type: 'loaded',
           name: state.name,
-          reload: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
-          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+          reload: () => {
+            ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
+          },
+          close: () => {
+            ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } }));
+          },
         };
       case 'error':
         return {
           type: 'error',
           message: state.message,
-          retry: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
-          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+          retry: () => {
+            ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
+          },
+          close: () => {
+            ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } }));
+          },
         };
     }
   },
-};
+});
+
+export const profileWorkflow = createProfileWorkflow();
 ```
 <!-- README_SNIPPET:workflow:end -->
 
 Deep dive: [Overview](./docs/guides/overview.md), [Workers](./docs/guides/workers.md)
+Worker lifecycle notes include keyed side-effect semantics and one-shot analytics/idempotency patterns.
 
 ### 2. Subscribe in React (`@workflow-ts/react`)
 
@@ -121,17 +152,7 @@ import type { JSX } from 'react';
 import { profileWorkflow } from './workflow';
 
 export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
-  const rendering = useWorkflow(
-    profileWorkflow,
-    { userId },
-    (output) => {
-      switch (output.type) {
-        case 'closed':
-          console.log('Profile flow closed');
-          break;
-      }
-    },
-  );
+  const rendering = useWorkflow(profileWorkflow, { userId });
 
   switch (rendering.type) {
     case 'loading':
@@ -313,6 +334,18 @@ See [examples/](./examples):
 
 - [@workflow-ts/core API](./packages/core/README.md)
 - [@workflow-ts/react API](./packages/react/README.md)
+
+## AI agent Skill
+
+Install the workflow-ts skill with the `skills` CLI:
+
+```bash
+npx skills add BenedictP/workflow-ts
+```
+
+Then use the skill in prompts as `$workflow-ts-architecture`.
+
+Docs: [Skills CLI](https://skills.sh/docs/cli), [FAQ](https://skills.sh/docs/faq), [Overview](https://skills.sh/docs)
 
 ## Development
 

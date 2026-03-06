@@ -82,25 +82,126 @@ runtime.dispose();
 
 ## Testing workers
 
-### Approach 1: run real async workers
+### Approach 1: run real async workers with controlled completion
 
-This is best when you want to verify real worker wiring and lifecycle.
+This verifies real worker wiring and lifecycle without flaky `setTimeout(...)` waits.
 
 ```ts
-it('loads data through worker', async () => {
-  const runtime = createRuntime(workflowWithWorker, undefined);
-  runtime.getRendering().start();
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
-  await new Promise((resolve) => setTimeout(resolve, 0));
+it('loads data through worker', async () => {
+  const pending = deferred<{ id: string }>();
+  const loadWorker = createWorker('load', async () => pending.promise);
+  const runtime = createRuntime(workflowWithWorker(loadWorker), undefined);
+
+  runtime.getRendering().start();
+  expect(runtime.getRendering().status).toBe('loading');
+
+  pending.resolve({ id: '42' });
+  await Promise.resolve(); // flush worker completion microtask
 
   expect(runtime.getRendering().status).toBe('loaded');
   runtime.dispose();
 });
 ```
 
-### Approach 2: simulate completion with `runtime.send(...)`
+### Test cancellation explicitly
 
-This is best for pure workflow transition tests where async timing is not important.
+If a key is not called in the next render, the runtime aborts that worker.
+
+```ts
+it('aborts worker when no longer rendered', async () => {
+  let aborted = false;
+
+  const worker = createWorker('load', async (signal) => {
+    signal.addEventListener('abort', () => {
+      aborted = true;
+    });
+    await new Promise(() => {}); // keep worker pending
+    return 'done';
+  });
+
+  const runtime = createRuntime(workflowWithConditionalWorker(worker), { enabled: true });
+  runtime.getRendering();
+
+  runtime.updateProps({ enabled: false });
+  runtime.getRendering();
+
+  expect(aborted).toBe(true);
+  runtime.dispose();
+});
+```
+
+### Test failure paths as data, not thrown worker errors
+
+`runWorker` handles worker output only. Thrown errors are logged and do not dispatch an action.
+For testable failure state transitions, return a result union from the worker and branch in the handler.
+
+```ts
+type LoadResult =
+  | { type: 'ok'; data: string }
+  | { type: 'error'; message: string };
+
+const loadWorker = createWorker<LoadResult>('load', async () => {
+  return { type: 'error', message: 'Network failed' };
+});
+
+// in render:
+ctx.runWorker(loadWorker, 'load', (result) => () => ({
+  state:
+    result.type === 'ok'
+      ? { type: 'loaded', data: result.data }
+      : { type: 'error', message: result.message },
+}));
+```
+
+This is the same pattern used in Kotlin Workflow tests with `Worker.from { Result.Success(...) }` / `Result.Error(...)`: model failures as worker outputs, then assert state/render transitions.
+
+```ts
+import { createWorker, createRuntime, type Worker } from '@workflow-ts/core';
+import { expect, it, vi } from 'vitest';
+
+type Result<T> = { type: 'success'; data: T } | { type: 'error'; message: string };
+type Card = { id: string };
+
+interface WorkerProvider {
+  loadCardsWorker: (sandbox: boolean) => Worker<Result<Card[]>>;
+}
+
+it('shows error, then loads cards after retry', async () => {
+  const provider: WorkerProvider = {
+    loadCardsWorker: vi
+      .fn()
+      .mockReturnValueOnce(
+        createWorker('load-cards-fail', async () => ({ type: 'error', message: 'TEST' })),
+      )
+      .mockReturnValueOnce(
+        createWorker('load-cards-ok', async () => ({ type: 'success', data: [{ id: '1' }] })),
+      ),
+  };
+
+  const runtime = createRuntime(createManageStoredPaymentWorkflow(provider), false);
+
+  await Promise.resolve();
+  expect(runtime.getRendering().type).toBe('error');
+
+  runtime.getRendering().retry();
+  await Promise.resolve();
+  expect(runtime.getRendering().type).toBe('cards');
+
+  runtime.dispose();
+});
+```
+
+### Approach 2: simulate transitions with `runtime.send(...)`
+
+This is useful for pure transition testing, but it does not verify worker start/abort behavior.
 
 ```ts
 const runtime = createRuntime(workflowWithWorker, undefined);

@@ -13,6 +13,8 @@
 ## Workflow Mechanics
 
 - [Composition & Child Workflows](./guides/composition.md)
+- [DevTools](./guides/devtools.md)
+- [Interceptors](./guides/interceptors.md)
 - [Workers](./guides/workers.md)
 - [Snapshots](./guides/snapshots.md)
 - [Testing](./guides/testing.md)

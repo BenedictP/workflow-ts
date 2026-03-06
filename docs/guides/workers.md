@@ -18,6 +18,24 @@ render: (props, state, ctx) => {
 }
 ```
 
+## Keyed Side-Effect Semantics
+
+`ctx.runWorker(worker, key, handler)` uses `key` as the worker identity for the current workflow runtime.
+
+1. First call with a key starts a worker.
+2. Calling again with the same key while it is still running does not restart it.
+3. Calling with the same key after completion starts a fresh worker run.
+4. If a key is not called in a render pass, that worker is cancelled at the end of the render cycle.
+5. Disposing the runtime cancels all active workers.
+
+### Function/Handler Changes with Same Key
+
+If you call `runWorker` again with the same key while a worker is running:
+
+- The running worker keeps going.
+- The runtime updates the output/completion handlers.
+- The worker itself is not restarted.
+
 ## Worker Lifecycle
 
 ### When Workers Are Cancelled
@@ -49,19 +67,56 @@ A worker is restarted when:
 ### Example: Worker Across State Transitions
 
 ```ts
+type State =
+  | { type: 'idle' }
+  | { type: 'loading' }
+  | { type: 'processing'; data?: Data }
+  | { type: 'done'; data: Data };
+
 render: (props, state, ctx) => {
-  // Worker called in both 'loading' and 'processing' states
-  ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
-    state: { ...s, data: result },
-  }));
-  
+  // Keep the same worker alive while the UI is in either loading phase.
+  if (state.type === 'loading' || state.type === 'processing') {
+    ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
+      state:
+        s.type === 'processing'
+          ? { ...s, data: result }
+          : { type: 'processing', data: result },
+    }));
+  }
+
   return { /* rendering */ };
 }
 ```
 
-- **Transition: idle → loading**: Worker starts
-- **Transition: loading → processing**: If worker still running, it stays alive (no restart)
-- **Transition: processing → done**: If worker completed, next call starts fresh
+Timeline with this example:
+
+- **`idle` -> `loading`**: key `data` is seen for the first time, so the worker starts.
+- **`loading` -> `processing`**: `runWorker(..., 'data', ...)` is still called with the same key, so the existing run stays alive (no restart).
+- **`processing` -> `done`**: `runWorker` is no longer called, so any still-running `data` worker is cancelled at end of render.
+- **`done` -> `loading` (later retry)**: key `data` is called again after prior completion/cancellation, so a fresh run starts.
+
+## Best Practices
+
+- Model expected business failures as worker output data (for example `Result.Success` / `Result.Error`), then branch in the `runWorker` handler.
+- Do not rely on thrown worker exceptions for domain state transitions; thrown errors are infrastructure failures and should be logged/observed.
+- Inject worker factories/providers into workflows so tests can stub sequential outcomes (for example first `error`, then `success` on retry).
+- Keep worker keys stable for the same logical effect; change keys only when you intentionally want a fresh run identity.
+- Test worker behavior with deterministic completion/cancellation patterns, not timing-dependent sleeps.
+
+```ts
+type LoadResult =
+  | { type: 'success'; cards: Card[] }
+  | { type: 'error'; message: string };
+
+ctx.runWorker(loadCardsWorker, `loadCards_${state.isSandbox}`, (result) => () => ({
+  state:
+    result.type === 'success'
+      ? { type: 'showCards', cards: result.cards, isSandbox: state.isSandbox }
+      : { type: 'loadingError', isSandbox: state.isSandbox },
+}));
+```
+
+For testing patterns (deferred completion, cancellation assertions, and Kotlin-style sequential worker stubs), see [Testing Workflows](./testing.md#testing-workers).
 
 ## Notes
 
@@ -69,3 +124,4 @@ render: (props, state, ctx) => {
 - Reusing the same key keeps the worker alive across renders.
 - Use `signal.aborted` in your worker for cooperative cancellation.
 - Avoid calling `runWorker` outside render (will warn).
+- Square's Kotlin `runningSideEffect` docs describe a lazy-start synchronous-render caveat. `workflow-ts` workers are started immediately when `runWorker` is invoked, so that caveat is not directly applicable here.

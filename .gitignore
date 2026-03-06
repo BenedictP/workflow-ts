@@ -5,7 +5,6 @@ node_modules
 # Build outputs
 dist
 *.tsbuildinfo
-docs-dist
 
 # Coverage
 coverage

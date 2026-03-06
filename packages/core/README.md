@@ -18,28 +18,27 @@ The main interface for defining a workflow.
 interface Workflow<P, S, O, R> {
   // Create initial state from props
   initialState: (props: P, snapshot?: string) => S;
-  
+
   // Optional: update state when props change (called before render)
   onPropsChanged?: (oldProps: P, newProps: P, state: S) => S;
-  
+
   // Render current state into a rendering
   render: (props: P, state: S, context: RenderContext<S, O>) => R;
-  
+
   // Optional: serialize state for persistence
   snapshot?: (state: S) => string;
-  
-  // Optional: restore state from snapshot
-  restore?: (snapshot: string) => S;
 }
 ```
 
 **Type Parameters:**
+
 - `P` - Props (input from parent)
 - `S` - State (internal state machine)
 - `O` - Output (events to parent, or `never`/`NoOutput` if none)
 - `R` - Rendering (external representation)
 
 **Common aliases:**
+
 - `NoProps` - Alias for `void`
 - `NoOutput` - Alias for `never`
 
@@ -73,26 +72,26 @@ const runtime = createRuntime(workflow, props);
 
 // With output handler
 const runtime = createRuntime(workflow, props, {
-  onOutput: (output) => console.log('Output:', output)
+  onOutput: (output) => console.log('Output:', output),
 });
 
 // With full config (snapshot restoration)
 const runtime = createRuntime(workflow, props, {
   onOutput: (output) => console.log('Output:', output),
   initialState: { count: 5 },
-  snapshot: savedSnapshot,  // previously saved via runtime.snapshot()
+  snapshot: savedSnapshot, // previously saved via runtime.snapshot()
 });
 
 // Enable debug logging
 const runtime = createRuntime(workflow, props, {
-  debug: true  // logs to console with [workflow-ts] prefix
+  debug: true, // logs to console with [workflow-ts] prefix
 });
 
 // Or use custom logger
 const runtime = createRuntime(workflow, props, {
   debug: (level, message, data) => {
     console.log(`[${level}]`, message, data);
-  }
+  },
 });
 
 // Optional: value-based props equality (Kotlin-like == semantics)
@@ -107,16 +106,20 @@ const runtime = createRuntime(workflow, props, (output) => {
 ```
 
 **Parameters:**
+
 - `workflow` - Workflow definition
 - `props` - Initial props
 - `config?` - Optional configuration object or output callback:
   - `onOutput?: (output: O) => void` - Callback for workflow outputs
   - `initialState?: S` - Initial state (for testing)
-  - `snapshot?: string` - Restore state from serialized snapshot
+  - `snapshot?: string` - Serialized snapshot passed to `initialState(props, snapshot)`
   - `debug?: boolean | DebugLogger` - Enable debug logging
-  - `interceptors?: readonly Interceptor<S, O>[]` - Observe/modify action processing
+  - `interceptors?: readonly Interceptor<S, O>[]` - Observe action processing and state transitions
   - `devTools?: DevTools<S, O, R>` - Runtime inspection and event logging
   - `propsEqual?: (prev: P, next: P) => boolean` - Props equality comparator used by this runtime's `updateProps` and `onPropsChanged` (defaults to `Object.is`; not inherited by child runtimes)
+
+For practical interceptor patterns (analytics/logging/debug/composition), see the
+[Interceptors guide](../../docs/guides/interceptors.md).
 
 ```typescript
 // Get current rendering
@@ -137,19 +140,19 @@ The runtime class returned by `createRuntime`.
 
 **Methods:**
 
-| Method | Description |
-|--------|-------------|
-| `getRendering()` | Get current rendering |
-| `getState()` | Get current state (for debugging) |
-| `getProps()` | Get current props |
-| `subscribe(listener)` | Subscribe to rendering changes. Returns unsubscribe function. |
-| `updateProps(props)` | Update props and trigger re-render when `propsEqual(prev, next)` is `false` |
-| `send(action)` | Send an action directly |
-| `on(type, handler)` | Subscribe to a specific output type (`{ type: string }` outputs) |
-| `off(type, handler?)` | Unsubscribe typed output handlers |
-| `snapshot()` | Get serialized state string |
-| `dispose()` | Clean up runtime and all children |
-| `isDisposed()` | Check if disposed |
+| Method                | Description                                                                 |
+| --------------------- | --------------------------------------------------------------------------- |
+| `getRendering()`      | Get current rendering                                                       |
+| `getState()`          | Get current state (for debugging)                                           |
+| `getProps()`          | Get current props                                                           |
+| `subscribe(listener)` | Subscribe to rendering changes. Returns unsubscribe function.               |
+| `updateProps(props)`  | Update props and trigger re-render when `propsEqual(prev, next)` is `false` |
+| `send(action)`        | Send an action directly                                                     |
+| `on(type, handler)`   | Subscribe to a specific output type (`{ type: string }` outputs)            |
+| `off(type, handler?)` | Unsubscribe typed output handlers                                           |
+| `snapshot()`          | Get serialized state string                                                 |
+| `dispose()`           | Clean up runtime and all children                                           |
+| `isDisposed()`        | Check if disposed                                                           |
 
 ### `RenderContext<S, O>`
 
@@ -159,23 +162,28 @@ Passed to `render()` for side effects.
 interface RenderContext<S, O> {
   // Send an action to the runtime
   actionSink: Sink<Action<S, O>>;
-  
+
   // Render a child workflow
   renderChild: <CP, CS, CO, CR>(
     workflow: Workflow<CP, CS, CO, CR>,
     props: CP,
     key?: string,
-    handler?: (output: CO) => Action<S, O>
+    handler?: (output: CO) => Action<S, O>,
   ) => CR;
-  
+
   // Run a worker (async operation)
-  runWorker: <W>(
-    worker: Worker<W>,
-    key: string,
-    handler: (output: W) => Action<S, O>
-  ) => void;
+  runWorker: <W>(worker: Worker<W>, key: string, handler: (output: W) => Action<S, O>) => void;
 }
 ```
+
+`runWorker` key behavior:
+
+- `key` defines worker identity in the runtime.
+- Same key + still running: worker stays alive (no restart), handlers are updated.
+- Same key after completion: starts a fresh worker run.
+- If not called in a render pass: cancelled at end of render cycle.
+
+For full lifecycle details and one-shot analytics/idempotency guidance, see [Workers guide](../../docs/guides/workers.md).
 
 ### Action Types
 
@@ -187,8 +195,8 @@ A pure function that transforms state:
 type Action<S, O = never> = (state: S) => ActionResult<S, O>;
 
 interface ActionResult<S, O> {
-  state: S;           // New state (required)
-  output?: O;         // Event to parent (optional)
+  state: S; // New state (required)
+  output?: O; // Event to parent (optional)
 }
 ```
 
@@ -212,16 +220,14 @@ const noop = noChange<State>();
 // Compose actions
 const resetAndNotify = compose(
   action<{ count: number }>((s) => ({ ...s, count: 0 })),
-  action<{ count: number }, { type: 'reset' }>((s) => s, { type: 'reset' })
+  action<{ count: number }, { type: 'reset' }>((s) => s, { type: 'reset' }),
 );
 
 // Named action (for debugging)
 const namedIncrement = named('increment', increment);
 // Runtime DevTools events include: actionName: 'increment'
 
-type StateUnion =
-  | { type: 'idle' }
-  | { type: 'loaded'; value: number };
+type StateUnion = { type: 'idle' } | { type: 'loaded'; value: number };
 
 // Guarded action for union states
 const loadedOnly = safeAction<StateUnion, never, 'loaded'>('loaded', (s) => ({
@@ -304,25 +310,21 @@ const { snapshot, restore } = jsonSnapshot<{ count: number }>();
 
 // Versioned snapshot (for migrations)
 const { snapshot, restore } = versionedSnapshot<State>(
-  1,  // version
+  1, // version
   (state) => JSON.stringify(state),
   (json, version) => {
     if (version === 0) {
       // migrate from v0
     }
     return JSON.parse(json);
-  }
+  },
 );
 ```
 
 ## Example: HTTP Request Workflow
 
 ```typescript
-import { 
-  type Workflow, 
-  createRuntime, 
-  createWorker
-} from '@workflow-ts/core';
+import { type Workflow, createRuntime, createWorker } from '@workflow-ts/core';
 
 // State machine for HTTP request
 type State =
@@ -348,7 +350,7 @@ const fetchWorker = createWorker('fetch', async (signal) => {
 
 const httpWorkflow: Workflow<void, State, never, Rendering> = {
   initialState: () => ({ type: 'idle' }),
-  
+
   render: (_props, state, ctx) => {
     // Run worker when loading
     if (state.type === 'loading') {
@@ -356,16 +358,16 @@ const httpWorkflow: Workflow<void, State, never, Rendering> = {
         state: { type: 'success', data: result },
       }));
     }
-    
+
     return {
       status: state.type,
       data: state.type === 'success' ? state.data : null,
       error: state.type === 'error' ? state.error : null,
-      
+
       fetch: () => {
         ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
       },
-      
+
       reset: () => {
         ctx.actionSink.send(() => ({ state: { type: 'idle' } }));
       },

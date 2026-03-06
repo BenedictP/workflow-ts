@@ -168,14 +168,6 @@ export interface Workflow<P, S, O, R> {
    * @returns Serialized state string
    */
   readonly snapshot?: (state: S) => string;
-
-  /**
-   * Optional: Restore state from a snapshot.
-   *
-   * @param snapshot - The snapshot string
-   * @returns Restored state
-   */
-  readonly restore?: (snapshot: string) => S;
 }
 
 /**

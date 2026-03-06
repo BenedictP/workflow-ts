@@ -17,6 +17,36 @@ export interface InterceptorContext<S> {
 }
 
 /**
+ * Why a state change happened.
+ */
+export type InterceptorStateChangeReason = 'action' | 'propsChanged';
+
+/**
+ * State change details emitted from action processing.
+ */
+export interface ActionStateChange<S, O> {
+  readonly reason: 'action';
+  readonly prevState: S;
+  readonly nextState: S;
+  readonly action: Action<S, O>;
+  readonly actionName?: string;
+}
+
+/**
+ * State change details emitted from onPropsChanged processing.
+ */
+export interface PropsChangedStateChange<S> {
+  readonly reason: 'propsChanged';
+  readonly prevState: S;
+  readonly nextState: S;
+}
+
+/**
+ * State change details provided to interceptors.
+ */
+export type InterceptorStateChange<S, O> = ActionStateChange<S, O> | PropsChangedStateChange<S>;
+
+/**
  * Configuration for an interceptor
  */
 export interface InterceptorConfig<S, O> {
@@ -27,22 +57,20 @@ export interface InterceptorConfig<S, O> {
   onSend?: (action: Action<S, O>, context: InterceptorContext<S>) => void;
 
   /**
-   * Called after action is processed - can modify result
-   * Return undefined to pass through to next interceptor
-   * Return a value to short-circuit or modify
+   * Called after action is processed.
+   * Intended for side effects only.
    */
   onResult?: (
     action: Action<S, O>,
     result: ActionResult<S, O>,
-    context: InterceptorContext<S>
-  ) => ActionResult<S, O>;
+    context: InterceptorContext<S>,
+  ) => void;
 
   /** Called if action throws */
-  onError?: (
-    action: Action<S, O>,
-    error: Error,
-    context: InterceptorContext<S>
-  ) => void;
+  onError?: (action: Action<S, O>, error: Error, context: InterceptorContext<S>) => void;
+
+  /** Called after state changes (from actions or onPropsChanged). */
+  onStateChange?: (change: InterceptorStateChange<S, O>, context: InterceptorContext<S>) => void;
 
   /** Filter which actions this interceptor applies to */
   filter?: (action: Action<S, O>) => boolean;
@@ -70,21 +98,19 @@ export function createInterceptor<S, O>(
     onResult?: (
       action: Action<S, O>,
       result: ActionResult<S, O>,
-      context: InterceptorContext<S>
-    ) => ActionResult<S, O>;
-    onError?: (
-      action: Action<S, O>,
-      error: Error,
-      context: InterceptorContext<S>
+      context: InterceptorContext<S>,
     ) => void;
+    onError?: (action: Action<S, O>, error: Error, context: InterceptorContext<S>) => void;
+    onStateChange?: (change: InterceptorStateChange<S, O>, context: InterceptorContext<S>) => void;
     filter?: (action: Action<S, O>) => boolean;
-  }
+  },
 ): Interceptor<S, O> {
   const fullConfig: InterceptorConfig<S, O> = {
     name,
     onSend: config.onSend,
     onResult: config.onResult,
     onError: config.onError,
+    onStateChange: config.onStateChange,
     filter: config.filter,
   };
   return {
@@ -124,14 +150,9 @@ export interface LoggingInterceptorOptions {
  * Create a logging interceptor
  */
 export function loggingInterceptor<S, O>(
-  options: LoggingInterceptorOptions = {}
+  options: LoggingInterceptorOptions = {},
 ): Interceptor<S, O> {
-  const {
-    logger = console,
-    logResults = true,
-    logState = false,
-    prefix = '[workflow]',
-  } = options;
+  const { logger = console, logResults = true, logState = false, prefix = '[workflow]' } = options;
 
   const config: InterceptorConfig<S, O> = {
     name: 'logging',
@@ -149,7 +170,6 @@ export function loggingInterceptor<S, O>(
       if (logState) {
         logger.log(`${prefix} New State:`, result.state);
       }
-      return result;
     };
     config.onError = (action, error) => {
       logger.error(`${prefix} Action error:`, String(action), error);
@@ -176,15 +196,8 @@ export interface DebugInterceptorOptions {
 /**
  * Create a debug interceptor that can be toggled
  */
-export function debugInterceptor<S, O>(
-  options: DebugInterceptorOptions = {}
-): Interceptor<S, O> {
-  const {
-    enabled = true,
-    logger = console,
-    logSend = true,
-    logResults = true,
-  } = options;
+export function debugInterceptor<S, O>(options: DebugInterceptorOptions = {}): Interceptor<S, O> {
+  const { enabled = true, logger = console, logSend = true, logResults = true } = options;
 
   const config: InterceptorConfig<S, O> = {
     name: 'debug',
@@ -200,11 +213,10 @@ export function debugInterceptor<S, O>(
   }
 
   if (logResults) {
-    config.onResult = (action, result) => {
+    config.onResult = (action) => {
       logger.log(`[workflow] Debug: Action result`, {
         action: String(action),
       });
-      return result;
     };
   }
 
@@ -218,9 +230,7 @@ export function debugInterceptor<S, O>(
 /**
  * Compose multiple interceptors into a single interceptor chain
  */
-export function composeInterceptors<S, O>(
-  ...interceptors: Interceptor<S, O>[]
-): Interceptor<S, O> {
+export function composeInterceptors<S, O>(...interceptors: Interceptor<S, O>[]): Interceptor<S, O> {
   const name = interceptors.map((i) => i.name).join(' → ');
 
   const config: InterceptorConfig<S, O> = {
@@ -232,24 +242,20 @@ export function composeInterceptors<S, O>(
       }
     },
     onResult: (action, result, ctx) => {
-      let currentResult: ActionResult<S, O> = result;
       for (const interceptor of interceptors) {
         if (interceptor.config.filter?.(action) === false) continue;
-        const override = interceptor.config.onResult?.(
-          action,
-          currentResult,
-          ctx
-        );
-        if (override !== undefined) {
-          currentResult = override;
-        }
+        interceptor.config.onResult?.(action, result, ctx);
       }
-      return currentResult;
     },
     onError: (action, error, _ctx) => {
       for (const interceptor of interceptors) {
         if (interceptor.config.filter?.(action) === false) continue;
         interceptor.config.onError?.(action, error, _ctx);
+      }
+    },
+    onStateChange: (change, ctx) => {
+      for (const interceptor of interceptors) {
+        interceptor.config.onStateChange?.(change, ctx);
       }
     },
   };

@@ -5,17 +5,7 @@ import type { JSX } from 'react';
 import { profileWorkflow } from './workflow';
 
 export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
-  const rendering = useWorkflow(
-    profileWorkflow,
-    { userId },
-    (output) => {
-      switch (output.type) {
-        case 'closed':
-          console.log('Profile flow closed');
-          break;
-      }
-    },
-  );
+  const rendering = useWorkflow(profileWorkflow, { userId });
 
   switch (rendering.type) {
     case 'loading':

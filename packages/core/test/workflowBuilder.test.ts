@@ -37,7 +37,6 @@ describe('createStatefulWorkflow', () => {
         },
       }),
       snapshot: (state) => JSON.stringify(state),
-      restore: (snapshot) => JSON.parse(snapshot) as State,
     });
 
     const outputs: Output[] = [];

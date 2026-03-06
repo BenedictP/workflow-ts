@@ -44,21 +44,10 @@ export { routeChildOutput, type ChildOutputHandlers } from './child';
 export { matchResult, type Result, type ResultHandlers } from './result';
 
 // Workers
-export {
-  createWorker,
-  debounceWorker,
-  fetchWorker,
-  fromPromise,
-  WorkerManager,
-} from './worker';
+export { createWorker, debounceWorker, fetchWorker, fromPromise, WorkerManager } from './worker';
 
 // Snapshot utilities
-export {
-  jsonSnapshot,
-  SnapshotParseError,
-  type Snapshotable,
-  versionedSnapshot,
-} from './snapshot';
+export { jsonSnapshot, SnapshotParseError, type Snapshotable, versionedSnapshot } from './snapshot';
 
 // Interceptors
 export {
@@ -66,9 +55,13 @@ export {
   loggingInterceptor,
   debugInterceptor,
   composeInterceptors,
+  type ActionStateChange,
+  type PropsChangedStateChange,
   type Interceptor,
   type InterceptorConfig,
   type InterceptorContext,
+  type InterceptorStateChange,
+  type InterceptorStateChangeReason,
   type InterceptorLogger,
   type LoggingInterceptorOptions,
   type DebugInterceptorOptions,

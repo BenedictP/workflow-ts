@@ -1,5 +1,5 @@
 import type { DevTools, RuntimeDevTools } from './devtools';
-import type { Interceptor } from './interceptor';
+import type { Interceptor, InterceptorStateChange } from './interceptor';
 import type { Action, RenderContext, Worker, Workflow } from './types';
 import { WorkerManager } from './worker';
 
@@ -36,6 +36,8 @@ const defaultLogger: DebugLogger = (level, message, data) => {
     console[level](`${prefix} ${message}`);
   }
 };
+
+let runtimeKeyCounter = 0;
 
 // ============================================================
 // Workflow Runtime - The engine that drives workflows
@@ -94,12 +96,13 @@ export class WorkflowRuntime<P, S, O, R> {
   private outputHandlers = new Map<string, ((output: unknown) => void) | undefined>();
   /** Type-safe output handlers for specific output types */
   private readonly typedOutputHandlers = new Map<string, Set<(output: unknown) => void>>();
-  private readonly workflowKeyMap = new WeakMap<object, string>();
-  private workflowKeyCounter = 0;
+  private readonly childWorkflowIdentityKeyMap = new WeakMap<object, string>();
+  private childWorkflowIdentityKeyCounter = 0;
 
   private readonly debug: DebugLogger | null;
   private readonly devTools: RuntimeDevTools<S, O, R> | null;
   private readonly propsEqual: PropsComparator<P>;
+  private readonly workflowKey: string;
 
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
     // Initialize debug logger
@@ -113,14 +116,14 @@ export class WorkflowRuntime<P, S, O, R> {
 
     const restoredState =
       config.snapshot !== undefined
-        ? (config.workflow.restore?.(config.snapshot) ??
-          config.workflow.initialState(config.props, config.snapshot))
+        ? config.workflow.initialState(config.props, config.snapshot)
         : undefined;
 
     this.state = config.initialState ?? restoredState ?? config.workflow.initialState(config.props);
     this.currentProps = config.props;
     this.lastRenderedProps = config.props;
     this.propsEqual = config.propsEqual ?? Object.is;
+    this.workflowKey = this.createRuntimeKey(config.workflow);
 
     this.debug?.('log', 'Runtime initialized', { initialState: this.state });
 
@@ -375,16 +378,31 @@ export class WorkflowRuntime<P, S, O, R> {
     }
 
     if (this.config.workflow.onPropsChanged !== undefined) {
+      const interceptors = this.config.interceptors ?? [];
+      const prevState = this.state;
       const nextState = this.config.workflow.onPropsChanged(
         this.lastRenderedProps,
         this.currentProps,
-        this.state,
+        prevState,
       );
 
-      if (nextState !== this.state) {
+      if (nextState !== prevState) {
+        const context = {
+          state: prevState,
+          props: this.currentProps,
+          workflowKey: this.workflowKey,
+        };
+        const change: InterceptorStateChange<S, O> = {
+          reason: 'propsChanged',
+          prevState,
+          nextState,
+        };
+        for (const interceptor of interceptors) {
+          interceptor.config.onStateChange?.(change, context);
+        }
         this.devTools?._log({
           type: 'stateChange',
-          prevState: this.state,
+          prevState,
           newState: nextState,
         });
         this.state = nextState;
@@ -397,7 +415,7 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   private handleAction(action: Action<S, O>): void {
-    if (this.disposed) return;  // Silently ignore actions after disposal
+    if (this.disposed) return; // Silently ignore actions after disposal
 
     if (this.isRendering || this.isProcessingActions) {
       this.actionQueue.push(action);
@@ -432,7 +450,7 @@ export class WorkflowRuntime<P, S, O, R> {
     const context = {
       state: this.state,
       props: this.currentProps,
-      workflowKey: '',
+      workflowKey: this.workflowKey,
     };
 
     // DevTools: log action send
@@ -451,13 +469,10 @@ export class WorkflowRuntime<P, S, O, R> {
       // Execute action
       result = action(this.state);
 
-      // Call onResult interceptors (can modify result)
+      // Call onResult interceptors
       for (const interceptor of interceptors) {
         if (interceptor.config.filter?.(action) === false) continue;
-        const override = interceptor.config.onResult?.(action, result, context);
-        if (override !== undefined) {
-          result = override;
-        }
+        interceptor.config.onResult?.(action, result, context);
       }
     } catch (error) {
       // Call onError interceptors
@@ -489,9 +504,21 @@ export class WorkflowRuntime<P, S, O, R> {
     });
 
     if (result.state !== this.state) {
+      const prevState = this.state;
+      const change: InterceptorStateChange<S, O> = {
+        reason: 'action',
+        prevState,
+        nextState: result.state,
+        action,
+        actionName,
+      };
+      for (const interceptor of interceptors) {
+        if (interceptor.config.filter?.(action) === false) continue;
+        interceptor.config.onStateChange?.(change, context);
+      }
       this.devTools?._log({
         type: 'stateChange',
-        prevState: this.state,
+        prevState,
         newState: result.state,
       });
     }
@@ -561,7 +588,7 @@ export class WorkflowRuntime<P, S, O, R> {
     key: string | undefined,
     handler: ((output: CO) => Action<S, O>) | undefined,
   ): CR {
-    const childKey = key ?? this.getWorkflowKey(workflow);
+    const childKey = key ?? this.getChildWorkflowIdentityKey(workflow);
 
     // Mark this child as touched in the current render cycle
     this.touchedChildren.add(childKey);
@@ -651,24 +678,43 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getWorkflowKey(workflow: Workflow<any, any, any, any>): string {
+  private createRuntimeKey(workflow: Workflow<any, any, any, any>): string {
+    const nextRuntimeId = runtimeKeyCounter++;
+    const workflowName = this.getWorkflowName(workflow);
+    if (workflowName !== undefined) {
+      return `${workflowName}#${nextRuntimeId}`;
+    }
+    return `runtime-${nextRuntimeId}`;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getChildWorkflowIdentityKey(workflow: Workflow<any, any, any, any>): string {
+    const workflowName = this.getWorkflowName(workflow);
+    if (workflowName !== undefined) {
+      return workflowName;
+    }
+
+    // Use WeakMap for object identity (works for both object literals and class instances)
+    if (typeof workflow === 'object') {
+      const existing = this.childWorkflowIdentityKeyMap.get(workflow as object);
+      if (existing !== undefined) return existing;
+      const next = `workflow-${this.childWorkflowIdentityKeyCounter++}`;
+      this.childWorkflowIdentityKeyMap.set(workflow as object, next);
+      return next;
+    }
+
+    return String(workflow);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getWorkflowName(workflow: Workflow<any, any, any, any>): string | undefined {
     // Only use constructor name for named functions/classes, not "Object" (default for object literals)
     const constructor = (workflow as object).constructor as { name?: string } | undefined;
     const name = constructor?.name ?? '';
     if (name.length > 0 && name !== 'Object') {
       return name;
     }
-
-    // Use WeakMap for object identity (works for both object literals and class instances)
-    if (typeof workflow === 'object') {
-      const existing = this.workflowKeyMap.get(workflow as object);
-      if (existing !== undefined) return existing;
-      const next = `workflow-${this.workflowKeyCounter++}`;
-      this.workflowKeyMap.set(workflow as object, next);
-      return next;
-    }
-
-    return String(workflow);
+    return undefined;
   }
 }
 

@@ -83,7 +83,7 @@ const shouldValidateProps = (): boolean => {
   // Prefer explicit runtime signals and default to false when environment is unknown.
   return resolveShouldValidateProps({
     reactNativeDev: (globalThis as { readonly __DEV__?: unknown }).__DEV__,
-    nodeEnv: typeof process === 'undefined' ? undefined : process.env?.['NODE_ENV'],
+    nodeEnv: typeof process === 'undefined' ? undefined : process.env['NODE_ENV'],
     viteDev: importMeta.env?.DEV,
     viteProd: importMeta.env?.PROD,
     viteMode: importMeta.env?.MODE,

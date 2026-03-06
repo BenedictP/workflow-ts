@@ -1942,6 +1942,37 @@ describe('Interceptors', () => {
       runtime.dispose();
     });
 
+    it('should provide unique workflowKey values for separate runtimes of the same workflow', () => {
+      const runtime1Keys: string[] = [];
+      const runtime2Keys: string[] = [];
+      const interceptor1 = createInterceptor<{ count: number }, unknown>('workflow-key-1', {
+        onSend: (_action, context) => {
+          runtime1Keys.push(context.workflowKey);
+        },
+      });
+      const interceptor2 = createInterceptor<{ count: number }, unknown>('workflow-key-2', {
+        onSend: (_action, context) => {
+          runtime2Keys.push(context.workflowKey);
+        },
+      });
+
+      const runtime1 = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor1] });
+      const runtime2 = createRuntime(counterWorkflow, undefined, { interceptors: [interceptor2] });
+
+      runtime1.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime2.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime1.send((state) => ({ state: { count: state.count + 1 } }));
+      runtime2.send((state) => ({ state: { count: state.count + 1 } }));
+
+      expect(new Set(runtime1Keys).size).toBe(1);
+      expect(new Set(runtime2Keys).size).toBe(1);
+      expect(runtime1Keys[0].length).toBeGreaterThan(0);
+      expect(runtime2Keys[0].length).toBeGreaterThan(0);
+      expect(runtime1Keys[0]).not.toBe(runtime2Keys[0]);
+      runtime1.dispose();
+      runtime2.dispose();
+    });
+
     it('should call onResult interceptor', () => {
       const calls: { count: number }[] = [];
       const interceptor = createInterceptor<{ count: number }, unknown>('test', {

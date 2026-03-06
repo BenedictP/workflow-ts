@@ -37,6 +37,8 @@ const defaultLogger: DebugLogger = (level, message, data) => {
   }
 };
 
+let runtimeKeyCounter = 0;
+
 // ============================================================
 // Workflow Runtime - The engine that drives workflows
 // ============================================================
@@ -94,8 +96,8 @@ export class WorkflowRuntime<P, S, O, R> {
   private outputHandlers = new Map<string, ((output: unknown) => void) | undefined>();
   /** Type-safe output handlers for specific output types */
   private readonly typedOutputHandlers = new Map<string, Set<(output: unknown) => void>>();
-  private readonly workflowKeyMap = new WeakMap<object, string>();
-  private workflowKeyCounter = 0;
+  private readonly childWorkflowIdentityKeyMap = new WeakMap<object, string>();
+  private childWorkflowIdentityKeyCounter = 0;
 
   private readonly debug: DebugLogger | null;
   private readonly devTools: RuntimeDevTools<S, O, R> | null;
@@ -121,7 +123,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.currentProps = config.props;
     this.lastRenderedProps = config.props;
     this.propsEqual = config.propsEqual ?? Object.is;
-    this.workflowKey = this.getWorkflowKey(config.workflow);
+    this.workflowKey = this.createRuntimeKey(config.workflow);
 
     this.debug?.('log', 'Runtime initialized', { initialState: this.state });
 
@@ -586,7 +588,7 @@ export class WorkflowRuntime<P, S, O, R> {
     key: string | undefined,
     handler: ((output: CO) => Action<S, O>) | undefined,
   ): CR {
-    const childKey = key ?? this.getWorkflowKey(workflow);
+    const childKey = key ?? this.getChildWorkflowIdentityKey(workflow);
 
     // Mark this child as touched in the current render cycle
     this.touchedChildren.add(childKey);
@@ -676,24 +678,43 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getWorkflowKey(workflow: Workflow<any, any, any, any>): string {
+  private createRuntimeKey(workflow: Workflow<any, any, any, any>): string {
+    const nextRuntimeId = runtimeKeyCounter++;
+    const workflowName = this.getWorkflowName(workflow);
+    if (workflowName !== undefined) {
+      return `${workflowName}#${nextRuntimeId}`;
+    }
+    return `runtime-${nextRuntimeId}`;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getChildWorkflowIdentityKey(workflow: Workflow<any, any, any, any>): string {
+    const workflowName = this.getWorkflowName(workflow);
+    if (workflowName !== undefined) {
+      return workflowName;
+    }
+
+    // Use WeakMap for object identity (works for both object literals and class instances)
+    if (typeof workflow === 'object') {
+      const existing = this.childWorkflowIdentityKeyMap.get(workflow as object);
+      if (existing !== undefined) return existing;
+      const next = `workflow-${this.childWorkflowIdentityKeyCounter++}`;
+      this.childWorkflowIdentityKeyMap.set(workflow as object, next);
+      return next;
+    }
+
+    return String(workflow);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getWorkflowName(workflow: Workflow<any, any, any, any>): string | undefined {
     // Only use constructor name for named functions/classes, not "Object" (default for object literals)
     const constructor = (workflow as object).constructor as { name?: string } | undefined;
     const name = constructor?.name ?? '';
     if (name.length > 0 && name !== 'Object') {
       return name;
     }
-
-    // Use WeakMap for object identity (works for both object literals and class instances)
-    if (typeof workflow === 'object') {
-      const existing = this.workflowKeyMap.get(workflow as object);
-      if (existing !== undefined) return existing;
-      const next = `workflow-${this.workflowKeyCounter++}`;
-      this.workflowKeyMap.set(workflow as object, next);
-      return next;
-    }
-
-    return String(workflow);
+    return undefined;
   }
 }
 

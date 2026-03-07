@@ -160,7 +160,10 @@ const childRendering = ctx.renderChild(childWorkflow, childProps, 'child-key', (
 
 ## How to run worker-based async flows
 
-Run workers only from `render`, key them by logical effect identity, and inject workers through a provider interface for testability:
+Run workers only from `render`, key them by logical effect identity, and inject workers through a provider interface for testability.
+Inside `render`, structure logic as:
+- optional pre-`switch` worker startup only when it must run regardless of state
+- `switch (state.type)` as the main rendering/state-handling structure
 
 ```ts
 import type { RenderContext, Worker } from '@workflow-ts/core';
@@ -170,30 +173,35 @@ interface WorkerProvider {
 }
 
 function render(_props: Props, state: State, ctx: RenderContext<State, Output>): Rendering {
-  if (state.type === 'loading') {
-    ctx.runWorker(workerProvider.loadProfileWorker(), 'profile-load', (result) => () => ({
-      state: result.ok
-        ? { type: 'loaded', name: result.name }
-        : { type: 'error', message: result.message },
-    }));
-  }
+  // Pre-switch work is only for workers that must run regardless of state.
+  // ctx.runWorker(workerProvider.auditWorker(), 'audit', () => (s) => ({ state: s }));
 
-  // Continue returning your normal rendering for each state variant.
-  return state.type === 'loading'
-    ? { type: 'loading', close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })) }
-    : state.type === 'loaded'
-      ? {
-          type: 'loaded',
-          name: state.name,
-          reload: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
-          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
-        }
-      : {
-          type: 'error',
-          message: state.message,
-          retry: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
-          close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
-        };
+  switch (state.type) {
+    case 'loading':
+      ctx.runWorker(workerProvider.loadProfileWorker(), 'profile-load', (result) => () => ({
+        state: result.ok
+          ? { type: 'loaded', name: result.name }
+          : { type: 'error', message: result.message },
+      }));
+      return {
+        type: 'loading',
+        close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+      };
+    case 'loaded':
+      return {
+        type: 'loaded',
+        name: state.name,
+        reload: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
+        close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+      };
+    case 'error':
+      return {
+        type: 'error',
+        message: state.message,
+        retry: () => ctx.actionSink.send(() => ({ state: { type: 'loading' } })),
+        close: () => ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } })),
+      };
+  }
 }
 ```
 
@@ -201,6 +209,8 @@ function render(_props: Props, state: State, ctx: RenderContext<State, Output>):
 - Missing key in the next render cancels the worker at end of render cycle.
 - Disposing runtime cancels all active workers.
 - `DO` define worker dependencies behind a `WorkerProvider` interface and inject it into workflow factories.
+- `DO` keep `render` primarily as `switch (state.type)` branches for clarity and exhaustiveness.
+- `DO NOT` place general branching/return logic before the `switch`; reserve pre-`switch` code for unconditional worker startup only.
 
 ## How to write tests first
 

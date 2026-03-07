@@ -1,20 +1,29 @@
 # Workers
 
-Workers encapsulate async side‑effects and are started/stopped based on render calls.
+Workers encapsulate async side-effects and are started/stopped based on render calls.
+Keep `render` primarily as `switch (state.type)` branches. Use pre-switch code only for worker startup that must run regardless of state.
 
 ```ts
+type State = { type: 'loading' } | { type: 'loaded'; data: unknown };
+
 const fetchWorker = createWorker('fetch', async (signal) => {
   const res = await fetch('/api/data', { signal });
   return res.json();
 });
 
-render: (props, state, ctx) => {
-  if (state.type === 'loading') {
-    ctx.runWorker(fetchWorker, 'fetch', (result) => (s) => ({
-      state: { ...s, data: result, type: 'loaded' },
-    }));
+render: (_props, state, ctx) => {
+  // Pre-switch work is only for workers that should run for all states.
+  // ctx.runWorker(auditWorker, 'audit', () => (s) => ({ state: s }));
+
+  switch (state.type) {
+    case 'loading':
+      ctx.runWorker(fetchWorker, 'fetch', (result) => () => ({
+        state: { type: 'loaded', data: result },
+      }));
+      return { type: 'loading' };
+    case 'loaded':
+      return { type: 'loaded', data: state.data };
   }
-  return { /* rendering */ };
 }
 ```
 
@@ -74,17 +83,29 @@ type State =
   | { type: 'done'; data: Data };
 
 render: (props, state, ctx) => {
-  // Keep the same worker alive while the UI is in either loading phase.
-  if (state.type === 'loading' || state.type === 'processing') {
-    ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
-      state:
-        s.type === 'processing'
-          ? { ...s, data: result }
-          : { type: 'processing', data: result },
-    }));
+  switch (state.type) {
+    case 'idle':
+      return { type: 'idle' };
+    case 'loading':
+      ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
+        state:
+          s.type === 'processing'
+            ? { ...s, data: result }
+            : { type: 'processing', data: result },
+      }));
+      return { type: 'loading' };
+    case 'processing':
+      // Keep the same worker alive while the UI is in either loading phase.
+      ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
+        state:
+          s.type === 'processing'
+            ? { ...s, data: result }
+            : { type: 'processing', data: result },
+      }));
+      return { type: 'processing', data: state.data };
+    case 'done':
+      return { type: 'done', data: state.data };
   }
-
-  return { /* rendering */ };
 }
 ```
 
@@ -101,6 +122,7 @@ Timeline with this example:
 - Do not rely on thrown worker exceptions for domain state transitions; thrown errors are infrastructure failures and should be logged/observed.
 - Inject worker factories/providers into workflows so tests can stub sequential outcomes (for example first `error`, then `success` on retry).
 - Keep worker keys stable for the same logical effect; change keys only when you intentionally want a fresh run identity.
+- Keep `render` centered on a `switch (state.type)` for clarity and exhaustiveness; use pre-switch code only for unconditional worker startup.
 - Test worker behavior with deterministic completion/cancellation patterns, not timing-dependent sleeps.
 
 ```ts

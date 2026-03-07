@@ -141,6 +141,7 @@ export const profileWorkflow = createProfileWorkflow();
 
 Deep dive: [Overview](./docs/guides/overview.md), [Workers](./docs/guides/workers.md)
 Worker lifecycle notes include keyed side-effect semantics and one-shot analytics/idempotency patterns.
+Render convention: keep `render` primarily as `switch (state.type)`. Use pre-switch code only for worker startup that must run in every state.
 
 ### 2. Subscribe in React (`@workflow-ts/react`)
 
@@ -277,6 +278,8 @@ if (state.type === 'loading') {
   }));
 }
 ```
+
+In full workflows, keep rendering/state handling in a `switch (state.type)` and reserve pre-switch logic for unconditional worker startup only.
 
 More: [Workers](./docs/guides/workers.md)
 

@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import type { Workflow } from '@workflow-ts/core';
+import { WorkflowRuntime, type Workflow } from '@workflow-ts/core';
 import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -703,38 +703,83 @@ describe('useWorkflow', () => {
   it('should unsubscribe old outputHandler and not double-call after rerender with new handler', () => {
     const oldHandler = vi.fn();
     const newHandler = vi.fn();
+    const onSpy = vi.spyOn(WorkflowRuntime.prototype, 'on');
 
-    const { result, rerender, unmount } = renderHook(
-      ({ handler }: { handler: typeof oldHandler }) =>
-        useWorkflow(counterWorkflow, undefined, undefined, {
-          outputHandlers: { reachedZero: handler },
-        }),
-      { initialProps: { handler: oldHandler } },
-    );
+    try {
+      const { result, rerender, unmount } = renderHook(
+        ({ handler }: { handler: typeof oldHandler }) =>
+          useWorkflow(counterWorkflow, undefined, undefined, {
+            outputHandlers: { reachedZero: handler },
+          }),
+        { initialProps: { handler: oldHandler } },
+      );
 
-    // Trigger reachedZero (increment then decrement back to 0)
-    act(() => {
-      result.current.onIncrement();
-      result.current.onDecrement();
-    });
+      expect(onSpy).toHaveBeenCalledTimes(1);
 
-    expect(oldHandler).toHaveBeenCalledTimes(1);
-    expect(newHandler).toHaveBeenCalledTimes(0);
+      // Trigger reachedZero (increment then decrement back to 0)
+      act(() => {
+        result.current.onIncrement();
+        result.current.onDecrement();
+      });
 
-    // Swap handler
-    rerender({ handler: newHandler });
+      expect(oldHandler).toHaveBeenCalledTimes(1);
+      expect(newHandler).toHaveBeenCalledTimes(0);
 
-    // Trigger reachedZero again
-    act(() => {
-      result.current.onIncrement();
-      result.current.onDecrement();
-    });
+      // Swap handler
+      rerender({ handler: newHandler });
 
-    // Old handler must not be called again — cleanup must have run
-    expect(oldHandler).toHaveBeenCalledTimes(1);
-    expect(newHandler).toHaveBeenCalledTimes(1);
+      // Subscription should stay stable by output type across rerenders.
+      expect(onSpy).toHaveBeenCalledTimes(1);
 
-    unmount();
+      // Trigger reachedZero again
+      act(() => {
+        result.current.onIncrement();
+        result.current.onDecrement();
+      });
+
+      // Old handler must not be called again — latest handler should be invoked.
+      expect(oldHandler).toHaveBeenCalledTimes(1);
+      expect(newHandler).toHaveBeenCalledTimes(1);
+
+      unmount();
+    } finally {
+      onSpy.mockRestore();
+    }
+  });
+
+  it('should not resubscribe outputHandlers when inline options rerender with same handler', () => {
+    const handler = vi.fn();
+    const onSpy = vi.spyOn(WorkflowRuntime.prototype, 'on');
+
+    try {
+      const { result, rerender, unmount } = renderHook(
+        ({ tick }: { tick: number }) => {
+          const rendering = useWorkflow(counterWorkflow, undefined, undefined, {
+            outputHandlers: { reachedZero: handler },
+          });
+          return { rendering, tick };
+        },
+        { initialProps: { tick: 0 } },
+      );
+
+      expect(onSpy).toHaveBeenCalledTimes(1);
+
+      rerender({ tick: 1 });
+      rerender({ tick: 2 });
+
+      expect(onSpy).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        result.current.rendering.onIncrement();
+        result.current.rendering.onDecrement();
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      unmount();
+    } finally {
+      onSpy.mockRestore();
+    }
   });
 
   it('should work in React StrictMode', () => {
@@ -1136,39 +1181,49 @@ describe('useWorkflowWithState', () => {
   it('should unsubscribe old outputHandler and not double-call after rerender with new handler', () => {
     const oldHandler = vi.fn();
     const newHandler = vi.fn();
+    const onSpy = vi.spyOn(WorkflowRuntime.prototype, 'on');
 
-    const { result, rerender, unmount } = renderHook(
-      ({ handler }: { handler: typeof oldHandler }) =>
-        useWorkflowWithState(counterWorkflow, {
-          props: undefined,
-          outputHandlers: { reachedZero: handler },
-        }),
-      { initialProps: { handler: oldHandler } },
-    );
+    try {
+      const { result, rerender, unmount } = renderHook(
+        ({ handler }: { handler: typeof oldHandler }) =>
+          useWorkflowWithState(counterWorkflow, {
+            props: undefined,
+            outputHandlers: { reachedZero: handler },
+          }),
+        { initialProps: { handler: oldHandler } },
+      );
 
-    // Trigger reachedZero (increment then decrement back to 0)
-    act(() => {
-      result.current.rendering.onIncrement();
-      result.current.rendering.onDecrement();
-    });
+      expect(onSpy).toHaveBeenCalledTimes(1);
 
-    expect(oldHandler).toHaveBeenCalledTimes(1);
-    expect(newHandler).toHaveBeenCalledTimes(0);
+      // Trigger reachedZero (increment then decrement back to 0)
+      act(() => {
+        result.current.rendering.onIncrement();
+        result.current.rendering.onDecrement();
+      });
 
-    // Swap handler
-    rerender({ handler: newHandler });
+      expect(oldHandler).toHaveBeenCalledTimes(1);
+      expect(newHandler).toHaveBeenCalledTimes(0);
 
-    // Trigger reachedZero again
-    act(() => {
-      result.current.rendering.onIncrement();
-      result.current.rendering.onDecrement();
-    });
+      // Swap handler
+      rerender({ handler: newHandler });
 
-    // Old handler must not be called again — cleanup must have run
-    expect(oldHandler).toHaveBeenCalledTimes(1);
-    expect(newHandler).toHaveBeenCalledTimes(1);
+      // Subscription should stay stable by output type across rerenders.
+      expect(onSpy).toHaveBeenCalledTimes(1);
 
-    unmount();
+      // Trigger reachedZero again
+      act(() => {
+        result.current.rendering.onIncrement();
+        result.current.rendering.onDecrement();
+      });
+
+      // Old handler must not be called again — latest handler should be invoked.
+      expect(oldHandler).toHaveBeenCalledTimes(1);
+      expect(newHandler).toHaveBeenCalledTimes(1);
+
+      unmount();
+    } finally {
+      onSpy.mockRestore();
+    }
   });
 
   it('should work in React StrictMode', () => {

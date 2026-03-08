@@ -446,6 +446,10 @@ const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
   const onOutputRef = useRef(options.onOutput);
   onOutputRef.current = options.onOutput;
 
+  const outputHandlersRef = useRef(options.outputHandlers);
+  outputHandlersRef.current = options.outputHandlers;
+  const outputHandlerSubscriptionsRef = useRef(new Map<string, () => void>());
+
   const onStoreRuntimeStateRef = useRef(options.onStoreRuntimeState);
   onStoreRuntimeStateRef.current = options.onStoreRuntimeState;
 
@@ -506,15 +510,35 @@ const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
     clearTimeout(timerId);
     pendingDisposalsRef.current.delete(runtimeToKeep);
   }, []);
+  const clearOutputHandlerSubscriptions = useCallback(() => {
+    outputHandlerSubscriptionsRef.current.forEach((unsubscribe) => {
+      unsubscribe();
+    });
+    outputHandlerSubscriptionsRef.current.clear();
+  }, []);
 
-  // Register typed output handlers with proper cleanup
+  // Keep output subscriptions scoped to the active runtime lifecycle.
   useEffect(() => {
-    if (runtime === null || runtime.isDisposed() || !shouldBeActive) return;
+    if (runtime === null || runtime.isDisposed() || !shouldBeActive) {
+      clearOutputHandlerSubscriptions();
+      return;
+    }
+
+    return () => {
+      clearOutputHandlerSubscriptions();
+    };
+  }, [runtime, shouldBeActive, clearOutputHandlerSubscriptions]);
+
+  // Register typed output handlers without resubscribing on every object identity change.
+  useEffect(() => {
+    if (runtime === null || runtime.isDisposed() || !shouldBeActive) {
+      clearOutputHandlerSubscriptions();
+      return;
+    }
 
     const handlers = options.outputHandlers;
-    if (!handlers) return;
-
-    const unsubscribes: (() => void)[] = [];
+    const subscriptions = outputHandlerSubscriptionsRef.current;
+    const nextSubscribedTypes = new Set<string>();
 
     // Object.entries loses type correlation between key and handler, so we cast.
     // When K is inferred as the full OutputType union, Extract<O, { type: OutputType }>
@@ -522,22 +546,31 @@ const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
     // unavoidable with Object.entries but safe: outputHandlers is typed to only allow
     // valid pairs, and runtime.on only calls each handler with its matching output type.
     type OutputType = O extends { type: string } ? O['type'] : never;
-    for (const [type, handler] of Object.entries(handlers)) {
-      if (handler !== undefined) {
-        const unsubscribe = runtime.on(
-          type as OutputType,
-          handler as (output: Extract<O, { type: OutputType }>) => void
-        );
-        unsubscribes.push(unsubscribe);
-      }
+    for (const [type, handler] of Object.entries(handlers ?? {})) {
+      if (handler === undefined) continue;
+      nextSubscribedTypes.add(type);
+
+      if (subscriptions.has(type)) continue;
+
+      const unsubscribe = runtime.on(
+        type as OutputType,
+        ((output: Extract<O, { type: OutputType }>) => {
+          const latestHandler = outputHandlersRef.current?.[type as OutputType];
+          if (latestHandler === undefined) return;
+          (
+            latestHandler as (output: Extract<O, { type: OutputType }>) => void
+          )(output);
+        }) as (output: Extract<O, { type: OutputType }>) => void,
+      );
+      subscriptions.set(type, unsubscribe);
     }
 
-    return () => {
-      unsubscribes.forEach((unsubscribe) => {
-        unsubscribe();
-      });
-    };
-  }, [runtime, options.outputHandlers, shouldBeActive]);
+    subscriptions.forEach((unsubscribe, type) => {
+      if (nextSubscribedTypes.has(type)) return;
+      unsubscribe();
+      subscriptions.delete(type);
+    });
+  }, [runtime, options.outputHandlers, shouldBeActive, clearOutputHandlerSubscriptions]);
 
   // Dispose this runtime when it is replaced or the component unmounts.
   useEffect(() => {

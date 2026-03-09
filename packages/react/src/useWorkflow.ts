@@ -292,6 +292,10 @@ const cloneDeepEqualContext = (context: DeepEqualContext): DeepEqualContext => {
   };
 };
 
+const isDirectlyComparableSetValue = (value: unknown): boolean => {
+  return value === null || value === undefined || typeof value === 'function' || !isObjectLike(value);
+};
+
 const deepEqual = (a: unknown, b: unknown, context = createDeepEqualContext()): boolean => {
   if (Object.is(a, b)) return true;
   if (!isObjectLike(a) || !isObjectLike(b)) return false;
@@ -335,17 +339,37 @@ const deepEqual = (a: unknown, b: unknown, context = createDeepEqualContext()): 
     if (!(a instanceof Set) || !(b instanceof Set)) return false;
     if (a.size !== b.size) return false;
 
-    const unmatchedValues: unknown[] = [...b.values()];
+    const aStructuralValues: unknown[] = [];
+    const bStructuralValues: unknown[] = [];
+
+    for (const bValue of b.values()) {
+      if (isDirectlyComparableSetValue(bValue)) continue;
+      bStructuralValues.push(bValue);
+    }
+
     for (const aValue of a.values()) {
+      if (isDirectlyComparableSetValue(aValue)) {
+        if (!b.has(aValue)) return false;
+        continue;
+      }
+
+      aStructuralValues.push(aValue);
+    }
+
+    if (aStructuralValues.length !== bStructuralValues.length) return false;
+    if (aStructuralValues.length === 0) return true;
+
+    const matchedStructuralValues = new Array<boolean>(bStructuralValues.length).fill(false);
+    for (const aValue of aStructuralValues) {
       let matchedIndex = -1;
-      for (let i = 0; i < unmatchedValues.length; i += 1) {
-        if (deepEqual(aValue, unmatchedValues[i], cloneDeepEqualContext(context))) {
-          matchedIndex = i;
-          break;
-        }
+      for (let i = 0; i < bStructuralValues.length; i += 1) {
+        if (matchedStructuralValues[i] === true) continue;
+        if (!deepEqual(aValue, bStructuralValues[i], cloneDeepEqualContext(context))) continue;
+        matchedIndex = i;
+        break;
       }
       if (matchedIndex === -1) return false;
-      unmatchedValues.splice(matchedIndex, 1);
+      matchedStructuralValues[matchedIndex] = true;
     }
     return true;
   }

@@ -503,6 +503,112 @@ describe('useWorkflow', () => {
     unmount();
   });
 
+  it('should treat reordered mixed-member sets as unchanged', () => {
+    type MixedSetValue =
+      | string
+      | (() => void)
+      | {
+          readonly id: number;
+          readonly label: string;
+        };
+
+    interface SetProps {
+      readonly values: Set<MixedSetValue>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+    }
+
+    const onSelect = (): void => undefined;
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: () => ({
+        renderCount: ++renderCount,
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      {
+        initialProps: {
+          props: {
+            values: new Set<MixedSetValue>(['alpha', onSelect, { id: 1, label: 'one' }]),
+          },
+        },
+      },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+
+    rerender({
+      props: {
+        values: new Set<MixedSetValue>([{ id: 1, label: 'one' }, 'alpha', onSelect]),
+      },
+    });
+    expect(result.current.renderCount).toBe(1);
+
+    unmount();
+  });
+
+  it('should update when a structural member changes in a mixed-member set', () => {
+    type MixedSetValue =
+      | string
+      | {
+          readonly id: number;
+          readonly label: string;
+        };
+
+    interface SetProps {
+      readonly values: Set<MixedSetValue>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+      readonly labels: readonly string[];
+    }
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: (props) => ({
+        renderCount: ++renderCount,
+        labels: [...props.values]
+          .filter((value): value is Extract<MixedSetValue, { readonly label: string }> =>
+            typeof value === 'object' && value !== null && 'label' in value,
+          )
+          .map((value) => value.label),
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      {
+        initialProps: {
+          props: {
+            values: new Set<MixedSetValue>(['alpha', { id: 1, label: 'one' }]),
+          },
+        },
+      },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+    expect(result.current.labels).toEqual(['one']);
+
+    rerender({
+      props: {
+        values: new Set<MixedSetValue>(['alpha', { id: 1, label: 'updated' }]),
+      },
+    });
+
+    expect(result.current.renderCount).toBe(2);
+    expect(result.current.labels).toEqual(['updated']);
+
+    unmount();
+  });
+
   it('should sync non-plain and deep prop mutations on same top-level reference', () => {
     const initialTimestamp = new Date('2026-01-01T00:00:00.000Z');
     const mutableProps: ComplexProps = {

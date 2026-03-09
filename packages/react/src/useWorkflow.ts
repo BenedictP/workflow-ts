@@ -281,15 +281,15 @@ const createDeepEqualContext = (): DeepEqualContext => ({
   seenPairs: [],
 });
 
-const cloneDeepEqualContext = (context: DeepEqualContext): DeepEqualContext => {
-  const seen = new WeakMap<object, object>();
-  for (const [source, target] of context.seenPairs) {
-    seen.set(source, target);
+const createDeepEqualCheckpoint = (context: DeepEqualContext): number => context.seenPairs.length;
+
+const rollbackDeepEqualContext = (context: DeepEqualContext, checkpoint: number): void => {
+  while (context.seenPairs.length > checkpoint) {
+    const pair = context.seenPairs.pop();
+    if (!pair) continue;
+    const [source] = pair;
+    context.seen.delete(source);
   }
-  return {
-    seen,
-    seenPairs: [...context.seenPairs],
-  };
 };
 
 const isDirectlyComparableSetValue = (value: unknown): boolean => {
@@ -364,7 +364,10 @@ const deepEqual = (a: unknown, b: unknown, context = createDeepEqualContext()): 
       let matchedIndex = -1;
       for (let i = 0; i < bStructuralValues.length; i += 1) {
         if (matchedStructuralValues[i] === true) continue;
-        if (!deepEqual(aValue, bStructuralValues[i], cloneDeepEqualContext(context))) continue;
+        const checkpoint = createDeepEqualCheckpoint(context);
+        const matches = deepEqual(aValue, bStructuralValues[i], context);
+        rollbackDeepEqualContext(context, checkpoint);
+        if (!matches) continue;
         matchedIndex = i;
         break;
       }

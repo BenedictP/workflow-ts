@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made core runtime listener and typed output handler dispatch deterministic by snapshotting callbacks per cycle, so mid-dispatch subscribe/unsubscribe applies on the next cycle and dispatch stops immediately if runtime is disposed.
 - Fixed `composeInterceptors()` so interceptor `filter(action)` is applied to action-driven `onStateChange` callbacks while keeping props-driven `onStateChange` delivery unchanged.
 - Optimized React prop `Set` comparison so reordered primitive-heavy sets avoid quadratic matching work during `useWorkflow` prop sync.
+- Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
 [Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.0.1...HEAD

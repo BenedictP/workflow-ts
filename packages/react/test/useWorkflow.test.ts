@@ -437,6 +437,60 @@ describe('useWorkflow', () => {
     unmount();
   });
 
+  it('should isolate failed structural set candidates from later candidate matches', () => {
+    interface ItemValue {
+      readonly id: number;
+      readonly details: {
+        readonly label: string;
+      };
+    }
+
+    interface SetProps {
+      readonly items: Set<ItemValue>;
+    }
+
+    interface SetRendering {
+      readonly renderCount: number;
+    }
+
+    let renderCount = 0;
+    const setWorkflow: Workflow<SetProps, null, never, SetRendering> = {
+      initialState: () => null,
+      render: () => ({
+        renderCount: ++renderCount,
+      }),
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ props }) => useWorkflow(setWorkflow, props),
+      {
+        initialProps: {
+          props: {
+            items: new Set<ItemValue>([
+              { id: 1, details: { label: 'one' } },
+              { id: 2, details: { label: 'two' } },
+            ]),
+          },
+        },
+      },
+    );
+
+    expect(result.current.renderCount).toBe(1);
+
+    rerender({
+      props: {
+        items: new Set<ItemValue>([
+          { id: 2, details: { label: 'two' } },
+          { id: 1, details: { label: 'one' } },
+        ]),
+      },
+    });
+
+    expect(result.current.renderCount).toBe(1);
+
+    unmount();
+  });
+
   it('should preserve cycle context when comparing reordered set members', () => {
     interface CyclicSetNode {
       id: number;

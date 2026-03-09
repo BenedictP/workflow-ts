@@ -661,13 +661,13 @@ export class WorkflowRuntime<P, S, O, R> {
     // only affects subsequent notifications.
     const listenersSnapshot = Array.from(this.listeners);
     for (const listener of listenersSnapshot) {
+      if (this.isDisposed()) break;
       try {
         listener(rendering);
       } catch (error) {
         this.debug?.('error', 'Error in workflow listener', error);
         console.error('Error in workflow listener:', error);
       }
-      if (this.isDisposed()) break;
     }
   }
 

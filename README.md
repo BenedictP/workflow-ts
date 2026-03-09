@@ -37,7 +37,7 @@ Canonical runnable source: [`examples/readme-profile`](./examples/readme-profile
 
 ![workflow-ts architecture overview](./docs/WorkflowArchitecture-dark.png)
 
-At a high level, `Props` enter a workflow runtime, the runtime stores explicit `State`, and each `render` call returns a framework-agnostic `Rendering` (data + callbacks). UI callbacks send `Actions` back into the runtime to transition state, `Workers` feed async results into the same action loop, and optional `Output` values bubble events to the parent workflow or hosting screen.
+At a high level, `Props` enter a workflow runtime, and the runtime stores explicit `State`. Every state transition triggers a `render` call, and `render` must return a framework-agnostic `Rendering` (data + callbacks) for the current state. UI callbacks send `Actions` back into the runtime to transition state, `Workers` feed async results into the same action loop, and optional `Output` values bubble events to the parent workflow or hosting screen.
 
 ### 1. Define the workflow (`@workflow-ts/core`)
 

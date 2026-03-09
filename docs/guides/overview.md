@@ -38,19 +38,19 @@ Not a good fit:
 
 The `createRuntime(workflow, props, config?)` call returns a runtime instance. For backward compatibility, the third argument can also be a plain output callback.
 
-| Method                | Description                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `getRendering()`      | Returns the current rendering                                                                                               |
-| `getState()`          | Returns the current workflow state                                                                                          |
-| `getProps()`          | Returns the current props                                                                                                   |
-| `updateProps(props)`  | Updates props and re-renders if changed                                                                                     |
-| `send(action)`        | Sends an action to the runtime                                                                                              |
-| `dispose()`           | Disposes the runtime and cancels all workers                                                                                |
-| `snapshot()`          | Returns a serializable snapshot of the current state                                                                        |
-| `subscribe(listener)` | Subscribes to rendering changes; returns an unsubscribe function                                                            |
-| `isDisposed()`        | Returns `true` if the runtime has been disposed                                                                             |
-| `on(type, handler)`   | Subscribes to typed outputs for discriminated union outputs shaped like `{ type: string }`; returns an unsubscribe function |
-| `off(type)`           | Removes typed-output handlers for discriminated union outputs shaped like `{ type: string }`                                |
+| Method                      | Description                                                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `getRendering()`            | Returns the current rendering                                                                                               |
+| `getState()`                | Returns the current workflow state                                                                                          |
+| `getProps()`                | Returns the current props                                                                                                   |
+| `updateProps(props)`        | Updates props and re-renders if changed                                                                                     |
+| `send(action)`              | Sends an action to the runtime                                                                                              |
+| `dispose()`                 | Disposes the runtime and cancels all workers                                                                                |
+| `snapshot()`                | Returns a serializable snapshot of the current state                                                                        |
+| `subscribe(listener)`       | Subscribes to rendering changes; returns an unsubscribe function                                                            |
+| `isDisposed()`              | Returns `true` if the runtime has been disposed                                                                             |
+| `on(type, handler)`         | Subscribes to typed outputs for discriminated union outputs shaped like `{ type: string }`; returns an unsubscribe function |
+| `off(type, handler?)`       | Removes a specific typed-output handler when `handler` is provided, or all handlers for `type` when omitted                |
 
 `on(...)` and `off(...)` are only useful when the workflow output is a discriminated union with a string `type` field.
 

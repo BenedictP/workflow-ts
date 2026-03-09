@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Added short inline comments to the README quick-start snippets while keeping them synced with the runnable `examples/readme-profile` sources.
+- Added README badges for CI status, per-package bundle size (`@workflow-ts/core`, `@workflow-ts/react`), and per-package npm versions.
 
 
 

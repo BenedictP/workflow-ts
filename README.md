@@ -1,5 +1,11 @@
 # workflow-ts
 
+[![Build Status](https://img.shields.io/github/actions/workflow/status/BenedictP/workflow-ts/ci.yml?branch=main&style=flat&colorA=000000&colorB=000000)](https://github.com/BenedictP/workflow-ts/actions?query=workflow%3ACI)
+[![Core Bundle Size](https://deno.bundlejs.com/?q=%40workflow-ts%2Fcore&badge=detailed&badge-style=flat)](https://bundlejs.com/?q=%40workflow-ts%2Fcore)
+[![React Bundle Size](https://deno.bundlejs.com/?q=%40workflow-ts%2Freact&badge=detailed&badge-style=flat)](https://bundlejs.com/?q=%40workflow-ts%2Freact)
+[![Core Version](https://img.shields.io/npm/v/%40workflow-ts%2Fcore?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/core)
+[![React Version](https://img.shields.io/npm/v/%40workflow-ts%2Freact?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/react)
+
 TypeScript implementation of Square's [Workflow architecture](https://developer.squareup.com/blog/workflow-compose/) for explicit, testable, state-machine-driven application logic.
 
 ## Why workflow-ts
@@ -33,32 +39,39 @@ Canonical runnable source: [`examples/readme-profile`](./examples/readme-profile
 ```typescript
 import { createWorker, type Worker, type Workflow } from '@workflow-ts/core';
 
+// Props enter the workflow from the hosting screen.
 export interface Props {
   userId: string;
 }
 
+// State is the internal state machine.
 export type State =
   | { type: 'loading' }
   | { type: 'loaded'; name: string }
   | { type: 'error'; message: string };
 
+// Output is emitted upward when the flow is done.
 export interface Output {
   type: 'closed';
 }
 
+// Rendering is the UI contract returned from render().
 export type Rendering =
   | { type: 'loading'; close: () => void }
   | { type: 'loaded'; name: string; reload: () => void; close: () => void }
   | { type: 'error'; message: string; retry: () => void; close: () => void };
 
+// Worker results feed back into state transitions.
 type LoadProfileResult =
   | { ok: true; name: string }
   | { ok: false; message: string };
 
+// Tests can inject custom workers through this provider.
 export interface WorkersProvider {
   loadProfileWorker: Worker<LoadProfileResult>;
 }
 
+// Simulate an async profile fetch that also honors cancellation.
 const createLoadProfileWorker = (): Worker<LoadProfileResult> => {
   return createWorker<LoadProfileResult>('load-profile', async (signal) => {
     await new Promise<void>((resolve) => {
@@ -68,6 +81,7 @@ const createLoadProfileWorker = (): Worker<LoadProfileResult> => {
       signal.addEventListener(
         'abort',
         () => {
+          // Abort clears the timer so the worker can finish immediately.
           clearTimeout(timer);
           resolve();
         },
@@ -87,6 +101,7 @@ const defaultWorkersProvider: WorkersProvider = {
   loadProfileWorker: createLoadProfileWorker(),
 };
 
+// Allow worker injection so tests can control success and failure paths.
 export const createProfileWorkflow = (
   workersProvider: WorkersProvider = defaultWorkersProvider,
 ): Workflow<Props, State, Output, Rendering> => ({
@@ -95,6 +110,7 @@ export const createProfileWorkflow = (
   render: (_props, state, ctx) => {
     switch (state.type) {
       case 'loading':
+        // Start the load worker while this rendering is active.
         ctx.runWorker(workersProvider.loadProfileWorker, 'profile-load', (result) => () => ({
           state: result.ok
             ? { type: 'loaded', name: result.name }
@@ -104,6 +120,7 @@ export const createProfileWorkflow = (
         return {
           type: 'loading',
           close: () => {
+            // Emit an output without changing the current state.
             ctx.actionSink.send((s) => ({ state: s, output: { type: 'closed' } }));
           },
         };
@@ -112,6 +129,7 @@ export const createProfileWorkflow = (
           type: 'loaded',
           name: state.name,
           reload: () => {
+            // UI events send actions back into the workflow.
             ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
           },
           close: () => {
@@ -123,6 +141,7 @@ export const createProfileWorkflow = (
           type: 'error',
           message: state.message,
           retry: () => {
+            // Retry by sending the state machine back to loading.
             ctx.actionSink.send(() => ({ state: { type: 'loading' } }));
           },
           close: () => {
@@ -151,10 +170,13 @@ import type { JSX } from 'react';
 import { profileWorkflow } from './workflow';
 
 export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
+  // Subscribe to the workflow and get the latest rendering for these props.
   const rendering = useWorkflow(profileWorkflow, { userId });
 
+  // Each rendering case maps directly to the UI for that state.
   switch (rendering.type) {
     case 'loading':
+      // The worker is still running, so only Close is available.
       return (
         <section>
           <h1>Profile</h1>
@@ -163,6 +185,7 @@ export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
         </section>
       );
     case 'loaded':
+      // Loaded renderings expose both data and follow-up actions.
       return (
         <section>
           <h1>Welcome {rendering.name}</h1>
@@ -171,6 +194,7 @@ export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
         </section>
       );
     case 'error':
+      // Error renderings carry a message plus a recovery action.
       return (
         <section>
           <h1>Profile</h1>
@@ -196,16 +220,20 @@ import { expect, it } from 'vitest';
 import { profileWorkflow } from '../src/workflow';
 
 it('transitions loading -> loaded', () => {
+  // Create a runtime so the workflow can be tested without mounting UI.
   const runtime = createRuntime(profileWorkflow, { userId: 'u1' });
 
+  // The workflow should start in the loading state and rendering.
   expect(runtime.getRendering().type).toBe('loading');
   expect(runtime.getState().type).toBe('loading');
 
+  // Drive the next transition the same way a UI callback would.
   runtime.send(() => ({ state: { type: 'loaded', name: 'Ada' } }));
   const loaded = runtime.getRendering();
   expect(loaded.type).toBe('loaded');
   expect((loaded as Extract<typeof loaded, { type: 'loaded' }>).name).toBe('Ada');
 
+  // Dispose the runtime to clean up workers and subscriptions.
   runtime.dispose();
 });
 ```

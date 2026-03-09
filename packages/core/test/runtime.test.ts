@@ -1989,6 +1989,63 @@ describe('Interceptors', () => {
       expect(calls).toEqual(['int2-send']);
     });
 
+    it('should respect filter for action-driven onStateChange in composed interceptors', () => {
+      const calls: string[] = [];
+      const action = () => ({ state: { count: 1 } });
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        filter: () => false,
+        onStateChange: () => calls.push('int1-state'),
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onStateChange: () => calls.push('int2-state'),
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onStateChange?.(
+        {
+          reason: 'action',
+          prevState: { count: 0 },
+          nextState: { count: 1 },
+          action,
+          actionName: 'increment',
+        },
+        {
+          state: { count: 0 },
+          props: {},
+          workflowKey: '',
+        },
+      );
+
+      expect(calls).toEqual(['int2-state']);
+    });
+
+    it('should ignore filter for props-driven onStateChange in composed interceptors', () => {
+      const calls: string[] = [];
+      const int1 = createInterceptor<{ count: number }, unknown>('int1', {
+        filter: () => false,
+        onStateChange: () => calls.push('int1-state'),
+      });
+      const int2 = createInterceptor<{ count: number }, unknown>('int2', {
+        onStateChange: () => calls.push('int2-state'),
+      });
+
+      const composed = composeInterceptors(int1, int2);
+      composed.config.onStateChange?.(
+        {
+          reason: 'propsChanged',
+          prevState: { count: 0 },
+          nextState: { count: 1 },
+        },
+        {
+          state: { count: 0 },
+          props: {},
+          workflowKey: '',
+        },
+      );
+
+      expect(calls).toEqual(['int1-state', 'int2-state']);
+    });
+
     it('should call onError for all interceptors', () => {
       const calls: string[] = [];
       const int1 = createInterceptor<{ count: number }, unknown>('int1', {

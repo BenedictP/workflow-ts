@@ -255,6 +255,9 @@ export function composeInterceptors<S, O>(...interceptors: Interceptor<S, O>[]):
     },
     onStateChange: (change, ctx) => {
       for (const interceptor of interceptors) {
+        if (change.reason === 'action' && interceptor.config.filter?.(change.action) === false) {
+          continue;
+        }
         interceptor.config.onStateChange?.(change, ctx);
       }
     },

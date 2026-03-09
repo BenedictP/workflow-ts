@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+
+
+## [0.1.2] - 2026-03-09
+
+### Changed
+
+- Clarified the docs onboarding path, child output routing, and typed output subscription requirements.
 ### Fixed
 
 - Prevented React output handler subscription churn when `outputHandlers` is passed as an inline object by keeping per-output subscriptions stable and dispatching to the latest handler via refs.
@@ -16,4 +24,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
-[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/BenedictP/workflow-ts/compare/v0.1.1...v0.1.2

@@ -22,12 +22,12 @@ workflow-ts is usually not worth the overhead when you have:
 
 ## Comparison at a glance
 
-| Tool | Best for | Tradeoff profile |
-| --- | --- | --- |
-| `workflow-ts` | Explicit state-machine UI flows with composition and worker lifecycle | More up-front modeling, strong long-term predictability |
-| `useReducer` | Local component state with moderate transition complexity | Minimal tooling, limited built-in async/composition structure |
-| Redux Toolkit | Shared app-wide store, normalized state, middleware ecosystem | Global-store overhead and selector architecture |
-| XState | Formal statecharts with guards and visual tooling | More statechart ceremony and machine vocabulary |
+| Tool          | Best for                                                              | Tradeoff profile                                              |
+| ------------- | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `workflow-ts` | Explicit state-machine UI flows with composition and worker lifecycle | More up-front modeling, strong long-term predictability       |
+| `useReducer`  | Local component state with moderate transition complexity             | Minimal tooling, limited built-in async/composition structure |
+| Redux Toolkit | Shared app-wide store, normalized state, middleware ecosystem         | Global-store overhead and selector architecture               |
+| XState        | Formal statecharts with guards and visual tooling                     | More statechart ceremony and machine vocabulary               |
 
 ## Adoption checklist
 
@@ -51,7 +51,7 @@ Adopt incrementally:
 
 ## Related guides
 
-- [First 15 Minutes](./first-15-minutes.md)
-- [Concept Map](./concept-map.md)
 - [Overview](./overview.md)
+- [React Integration](./react.md)
 - [Composition & Child Workflows](./composition.md)
+- [README Profile Example](../../examples/readme-profile/README.md)

@@ -5,9 +5,14 @@ Workflows compose as a tree. A parent renders children and combines their render
 ## Rendering a child
 
 ```ts
-const childRendering = ctx.renderChild(childWorkflow, childProps, 'child-key', (childOutput) => (state) => ({
-  state: handleChildOutput(state, childOutput),
-}));
+const childRendering = ctx.renderChild(
+  childWorkflow,
+  childProps,
+  'child-key',
+  (childOutput) => (state) => ({
+    state: handleChildOutput(state, childOutput),
+  }),
+);
 ```
 
 ### Keys
@@ -17,22 +22,46 @@ const childRendering = ctx.renderChild(childWorkflow, childProps, 'child-key', (
 
 ### Props updates
 
-Children receive updated props every render. If your child derives state from props, do so explicitly (e.g., compare props in render and dispatch an action).
+Children receive updated props every render. If your child derives state from props, use the `onPropsChanged` lifecycle hook to update state before the next render:
+
+```ts
+const childWorkflow = {
+  initialState: (props) => ({ value: props.initialValue }),
+  onPropsChanged: (oldProps, newProps, state) => {
+    if (oldProps.initialValue !== newProps.initialValue) {
+      return { ...state, value: newProps.initialValue };
+    }
+    return state;
+  },
+  render: (props, state, ctx) => ({ value: state.value }),
+};
+```
 
 ## Output handling
 
-The optional output handler maps child outputs to parent actions. If you don't need outputs, omit the handler.
-
-### Type-safe output subscription
-
-For workflows with discriminated union outputs, you can subscribe to specific output types:
+The optional `handler` argument on `renderChild(...)` is how a parent workflow receives child outputs and maps them to parent actions. If you don't need child outputs, omit the handler.
 
 ```ts
-type ChildOutput = 
-  | { type: 'success'; data: string }
-  | { type: 'error'; error: string };
+type ChildOutput = { type: 'success'; data: string } | { type: 'cancel' };
 
-// Runtime API - subscribe to specific types
+const childRendering = ctx.renderChild(childWorkflow, childProps, 'child-key', (childOutput) => {
+  return (state) => ({
+    state:
+      childOutput.type === 'success'
+        ? { ...state, step: 'done', data: childOutput.data }
+        : { ...state, step: 'editing' },
+  });
+});
+```
+
+### Runtime-level output subscriptions
+
+`runtime.on(...)` in `@workflow-ts/core` and `outputHandlers` in `@workflow-ts/react` are conveniences for listening to a workflow runtime's own outputs. They are separate from parent-child output routing and only apply when the output type is a discriminated union shaped like `{ type: string }`.
+
+```ts
+type WorkflowOutput = { type: 'success'; data: string } | { type: 'error'; error: string };
+
+// Runtime API - subscribe to specific output types
 runtime.on('success', (output) => {
   console.log('Loaded:', output.data);
 });
@@ -56,7 +85,7 @@ const rendering = useWorkflow(childWorkflow, props, undefined, {
   outputHandlers: {
     success: (output) => navigate(`/data/${output.data}`),
     error: (output) => showToast(output.error),
-  }
+  },
 });
 ```
 

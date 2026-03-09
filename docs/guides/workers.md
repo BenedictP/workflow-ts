@@ -24,7 +24,7 @@ render: (_props, state, ctx) => {
     case 'loaded':
       return { type: 'loaded', data: state.data };
   }
-}
+};
 ```
 
 ## Keyed Side-Effect Semantics
@@ -65,13 +65,13 @@ A worker is restarted when:
 
 ### Key Behavior by Scenario
 
-| Scenario | Worker Behavior |
-|----------|-----------------|
-| Same key, worker still running | Stays alive, handlers updated |
-| Same key, worker completed | Starts fresh instance |
-| Different key | Old stopped, new started |
-| Not called in render | Cancelled at end of render cycle |
-| Component unmounts | All workers cancelled |
+| Scenario                       | Worker Behavior                  |
+| ------------------------------ | -------------------------------- |
+| Same key, worker still running | Stays alive, handlers updated    |
+| Same key, worker completed     | Starts fresh instance            |
+| Different key                  | Old stopped, new started         |
+| Not called in render           | Cancelled at end of render cycle |
+| Component unmounts             | All workers cancelled            |
 
 ### Example: Worker Across State Transitions
 
@@ -89,24 +89,20 @@ render: (props, state, ctx) => {
     case 'loading':
       ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
         state:
-          s.type === 'processing'
-            ? { ...s, data: result }
-            : { type: 'processing', data: result },
+          s.type === 'processing' ? { ...s, data: result } : { type: 'processing', data: result },
       }));
       return { type: 'loading' };
     case 'processing':
       // Keep the same worker alive while the UI is in either loading phase.
       ctx.runWorker(dataWorker, 'data', (result) => (s) => ({
         state:
-          s.type === 'processing'
-            ? { ...s, data: result }
-            : { type: 'processing', data: result },
+          s.type === 'processing' ? { ...s, data: result } : { type: 'processing', data: result },
       }));
       return { type: 'processing', data: state.data };
     case 'done':
       return { type: 'done', data: state.data };
   }
-}
+};
 ```
 
 Timeline with this example:
@@ -126,9 +122,7 @@ Timeline with this example:
 - Test worker behavior with deterministic completion/cancellation patterns, not timing-dependent sleeps.
 
 ```ts
-type LoadResult =
-  | { type: 'success'; cards: Card[] }
-  | { type: 'error'; message: string };
+type LoadResult = { type: 'success'; cards: Card[] } | { type: 'error'; message: string };
 
 ctx.runWorker(loadCardsWorker, `loadCards_${state.isSandbox}`, (result) => () => ({
   state:
@@ -139,6 +133,39 @@ ctx.runWorker(loadCardsWorker, `loadCards_${state.isSandbox}`, (result) => () =>
 ```
 
 For testing patterns (deferred completion, cancellation assertions, and Kotlin-style sequential worker stubs), see [Testing Workflows](./testing.md#testing-workers).
+
+## Built-in Worker Utilities
+
+### `fromPromise(key, factory)`
+
+Creates a worker from a promise factory. The factory receives an optional `AbortSignal` for cooperative cancellation.
+
+```ts
+import { fromPromise } from '@workflow-ts/core';
+
+const loadData = fromPromise('load-data', (signal) => api.getData({ signal }));
+```
+
+### `fetchWorker(key, url, options?)`
+
+Creates a worker that fetches JSON from a URL. Throws on non-OK responses.
+
+```ts
+import { fetchWorker } from '@workflow-ts/core';
+
+const fetchTodos = fetchWorker<Todo[]>('fetch-todos', '/api/todos');
+```
+
+### `debounceWorker(key, worker, delayMs)`
+
+Wraps a worker with a delay before execution. If the worker is cancelled during the delay, the inner worker never runs.
+
+```ts
+import { createWorker, debounceWorker } from '@workflow-ts/core';
+
+const searchWorker = createWorker('search-inner', async (signal) => search(query, { signal }));
+const debouncedSearch = debounceWorker('search', searchWorker, 300);
+```
 
 ## Notes
 

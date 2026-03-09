@@ -1,6 +1,6 @@
 {
   "name": "@workflow-ts/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Core workflow runtime and types",
   "keywords": [
     "workflow",

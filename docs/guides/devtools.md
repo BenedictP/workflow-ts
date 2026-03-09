@@ -39,6 +39,7 @@ Current runtime integration emits these events:
 - `action:error`: logged when an action throws.
 - `stateChange`: logged when state changes (from action result or `onPropsChanged`).
 - `output`: logged when an action emits output.
+- `worker:start`, `worker:complete`, `worker:abort`: defined in `DevToolsEventType` but **not yet emitted** by the runtime integration.
 
 Event details:
 
@@ -51,20 +52,13 @@ Event details:
 - Enable/disable: `isEnabled()` and `setEnabled(enabled)`.
 - Event stream: `subscribe(handler)` and `getEvents()`.
 - Current snapshot: `getState()` returns `{ currentState, events }`.
-- Time-travel history: `getHistory()`, `jumpTo(index)`, `undo()`, `redo()`, `canUndo()`, `canRedo()`.
+- Time-travel history: `getHistory()`, `jumpTo(index)`, `undo()`, `redo()`, `canUndo()`, `canRedo()`. Note: `jumpTo`, `undo`, and `redo` return `DevToolsSnapshot` values only — they do not mutate runtime state or rewind/cancel workers.
 - Persistence: `serialize()` and `deserialize(data)`.
 - Maintenance: `clear()` (events only) and `reset()` (events, history, index, current state).
+
+Options note: `enableTiming`, `autoPause`, and `latencyThreshold` exist in `DevToolsOptions` but are **not yet enforced** by runtime/devtools logic.
 
 Behavior notes:
 
 - `maxEvents` defaults to `1000`; oldest events are dropped when the buffer limit is reached.
 - `setEnabled(false)` stops logging and subscriber notifications until re-enabled.
-
-## Current limits
-
-- `enableTimeTravel` is implemented and defaults to `true`.
-- `jumpTo(...)`, `undo()`, and `redo()` return `DevToolsSnapshot` values only; they do not mutate runtime state.
-- Because runtime state is not rewound, these APIs do not rewind, restart, or cancel workers.
-- If live runtime rewind is added in the future, worker coordination would need explicit handling (for example dispose and recreate runtime from snapshot).
-- `DevToolsOptions` also includes `enableTiming`, `autoPause`, and `latencyThreshold`, but these options are currently not enforced by runtime/devtools logic.
-- `DevToolsEventType` includes `worker:start`, `worker:complete`, and `worker:abort`, but current runtime integration does not emit those worker events.

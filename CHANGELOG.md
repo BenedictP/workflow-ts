@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
 
-- Clarified the docs onboarding path, child output routing, and typed output subscription requirements.
+
 
 ## [0.1.2] - 2026-03-09
 
+### Changed
+
+- Clarified the docs onboarding path, child output routing, and typed output subscription requirements.
 ### Fixed
 
 - Prevented React output handler subscription churn when `outputHandlers` is passed as an inline object by keeping per-output subscriptions stable and dispatching to the latest handler via refs.

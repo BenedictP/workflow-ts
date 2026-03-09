@@ -3,8 +3,8 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/BenedictP/workflow-ts/ci.yml?branch=main&style=flat&colorA=000000&colorB=000000)](https://github.com/BenedictP/workflow-ts/actions?query=workflow%3ACI)
 [![Core Bundle Size](https://img.shields.io/badge/core%20bundle%20size-4.68%20kB%20gzip-000000?style=flat&labelColor=000000)](https://bundlejs.com/?q=%40workflow-ts%2Fcore)
 [![React Bundle Size](https://img.shields.io/badge/react%20bundle%20size-9%20kB%20gzip-000000?style=flat&labelColor=000000)](https://bundlejs.com/?q=%40workflow-ts%2Freact)
-[![Core Version](https://img.shields.io/npm/v/%40workflow-ts%2Fcore?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/core)
-[![React Version](https://img.shields.io/npm/v/%40workflow-ts%2Freact?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/react)
+[![Core Version](https://img.shields.io/npm/v/%40workflow-ts%2Fcore?style=flat&label=%40workflow-ts%2Fcore&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/core)
+[![React Version](https://img.shields.io/npm/v/%40workflow-ts%2Freact?style=flat&label=%40workflow-ts%2Freact&colorA=000000&colorB=000000)](https://www.npmjs.com/package/@workflow-ts/react)
 
 TypeScript implementation of Square's [Workflow architecture](https://developer.squareup.com/blog/workflow-compose/) for explicit, testable, state-machine-driven application logic.
 

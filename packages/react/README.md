@@ -162,7 +162,7 @@ Worker caveat:
 - Worker execution is automatic by environment:
   - browser-like (`window` + `document`): allowed
   - React Native (`navigator.product === 'ReactNative'`): allowed
-  - test runtimes (`NODE_ENV === 'test'`, `vi`, or `jest`): allowed
+  - test runtimes (`NODE_ENV === 'test'`, `globalThis.vi`, or `globalThis.jest`): allowed
   - server-like non-test runtimes (for example Next.js SSR): blocked
 
 Recommended App Router usage:

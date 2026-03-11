@@ -102,7 +102,7 @@ Worker caveat:
 - Worker execution is automatic by environment (no hook option needed):
   1. browser-like (`window` + `document`): allowed
   2. React Native (`navigator.product === 'ReactNative'`): allowed
-  3. test runtimes (`NODE_ENV === 'test'`, `vi`, or `jest`): allowed
+  3. test runtimes (`NODE_ENV === 'test'`, `globalThis.vi`, or `globalThis.jest`): allowed
   4. server-like non-test runtimes (for example Next.js SSR): blocked
 
 For full patterns and troubleshooting, see [Next.js SSR & Hydration](./nextjs-ssr-hydration.md).

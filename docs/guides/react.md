@@ -86,6 +86,27 @@ const rendering = useWorkflow(workflow, props, undefined, {
 });
 ```
 
+## Next.js and SSR hydration
+
+`@workflow-ts/react` works with Next.js SSR, but hydration safety depends on deterministic workflow output.
+
+Rules:
+
+1. Use workflow hooks only in Client Components (`'use client'`).
+2. Keep first render output deterministic for the same props (avoid `Date.now()`, `Math.random()`, browser-only branches).
+3. Treat hydration warnings as correctness bugs and fix server/client render divergence.
+
+Worker caveat:
+
+- `ctx.runWorker(...)` starts workers from workflow render logic.
+- Worker execution is automatic by environment (no hook option needed):
+  1. browser-like (`window` + `document`): allowed
+  2. React Native (`navigator.product === 'ReactNative'`): allowed
+  3. test runtimes (`NODE_ENV === 'test'`, `globalThis.vi`, or `globalThis.jest`): allowed
+  4. server-like non-test runtimes (for example Next.js SSR): blocked
+
+For full patterns and troubleshooting, see [Next.js SSR & Hydration](./nextjs-ssr-hydration.md).
+
 ## Performance and React Compiler
 
 - Preferred setup: React Compiler enabled in your app build.

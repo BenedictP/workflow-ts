@@ -214,7 +214,7 @@ export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
 ```
 <!-- README_SNIPPET:react:end -->
 
-Deep dive: [React Integration](./docs/guides/react.md)
+Deep dive: [React Integration](./docs/guides/react.md), [Next.js SSR & Hydration](./docs/guides/nextjs-ssr-hydration.md)
 
 ### 3. Test without UI
 
@@ -353,6 +353,7 @@ Start here: [Documentation Index](./docs/index.md)
 
 - [Overview](./docs/guides/overview.md)
 - [React Integration](./docs/guides/react.md)
+- [Next.js SSR & Hydration](./docs/guides/nextjs-ssr-hydration.md)
 
 ### Workflow Mechanics
 

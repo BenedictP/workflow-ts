@@ -39,6 +39,54 @@ const defaultLogger: DebugLogger = (level, message, data) => {
 
 let runtimeKeyCounter = 0;
 
+const isBrowserLikeEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly window?: unknown;
+    readonly document?: unknown;
+  };
+  return runtimeGlobals.window !== undefined && runtimeGlobals.document !== undefined;
+};
+
+const isReactNativeEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly navigator?: {
+      readonly product?: unknown;
+    };
+  };
+  return runtimeGlobals.navigator?.product === 'ReactNative';
+};
+
+const isTestEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly vi?: unknown;
+    readonly jest?: unknown;
+  };
+
+  if (runtimeGlobals.vi !== undefined || runtimeGlobals.jest !== undefined) {
+    return true;
+  }
+
+  const nodeEnv = typeof process === 'undefined' ? undefined : process.env['NODE_ENV'];
+  return nodeEnv === 'test';
+};
+
+const isWorkerAllowedByEnvironment = (): boolean => {
+  return isBrowserLikeEnvironment() || isReactNativeEnvironment() || isTestEnvironment();
+};
+
+const isDevelopmentEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as { readonly __DEV__?: unknown };
+  if (typeof runtimeGlobals.__DEV__ === 'boolean') {
+    return runtimeGlobals.__DEV__;
+  }
+  const nodeEnv = typeof process === 'undefined' ? undefined : process.env['NODE_ENV'];
+  if (typeof nodeEnv === 'string') {
+    return nodeEnv !== 'production';
+  }
+  // If no signal is available, default to warning (safer)
+  return true;
+};
+
 // ============================================================
 // Workflow Runtime - The engine that drives workflows
 // ============================================================
@@ -103,6 +151,9 @@ export class WorkflowRuntime<P, S, O, R> {
   private readonly devTools: RuntimeDevTools<S, O, R> | null;
   private readonly propsEqual: PropsComparator<P>;
   private readonly workflowKey: string;
+  private readonly workerExecutionAllowed: boolean;
+  private readonly shouldWarnOnBlockedWorkers: boolean;
+  private readonly blockedWorkerWarningKeys = new Set<string>();
 
   constructor(private readonly config: RuntimeConfig<P, S, O, R>) {
     // Initialize debug logger
@@ -124,6 +175,8 @@ export class WorkflowRuntime<P, S, O, R> {
     this.lastRenderedProps = config.props;
     this.propsEqual = config.propsEqual ?? Object.is;
     this.workflowKey = this.createRuntimeKey(config.workflow);
+    this.workerExecutionAllowed = isWorkerAllowedByEnvironment();
+    this.shouldWarnOnBlockedWorkers = isDevelopmentEnvironment();
 
     this.debug?.('log', 'Runtime initialized', { initialState: this.state });
 
@@ -225,6 +278,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.cachedRendering = null;
     this.actionQueue.length = 0;
     this.typedOutputHandlers.clear();
+    this.blockedWorkerWarningKeys.clear();
   }
 
   /**
@@ -633,6 +687,11 @@ export class WorkflowRuntime<P, S, O, R> {
   }
 
   private runWorker<W>(worker: Worker<W>, key: string, handler: (output: W) => Action<S, O>): void {
+    if (!this.workerExecutionAllowed) {
+      this.warnBlockedWorker(key);
+      return;
+    }
+
     if (!this.workerManager.isInRenderCycle) {
       console.warn(
         'runWorker was called outside of render; workers started here may be stopped unexpectedly.',
@@ -651,6 +710,16 @@ export class WorkflowRuntime<P, S, O, R> {
         if (this.disposed) return;
         this.debug?.('log', 'Worker finished', { worker: key });
       },
+    );
+  }
+
+  private warnBlockedWorker(key: string): void {
+    if (!this.shouldWarnOnBlockedWorkers) return;
+    if (this.blockedWorkerWarningKeys.has(key)) return;
+    this.blockedWorkerWarningKeys.add(key);
+    console.warn(
+      `[workflow-ts] runWorker("${key}") was blocked in this environment. ` +
+      `Workers run automatically only in browser-like, React Native, and test runtimes.`,
     );
   }
 

@@ -505,11 +505,15 @@ const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
 
   if (needsNewRuntime) {
     const propsSnapshot = createPropsSnapshot(options.props);
-    options.runtimeRef.current = createRuntime(options.workflow, propsSnapshot.runtimeValue as P, {
-      onOutput: (output: O) => {
-        onOutputRef.current?.(output);
+    options.runtimeRef.current = createRuntime(
+      options.workflow,
+      propsSnapshot.runtimeValue as P,
+      {
+        onOutput: (output: O) => {
+          onOutputRef.current?.(output);
+        },
       },
-    });
+    );
     lastSyncedPropsRef.current = propsSnapshot;
   }
   workflowRef.current = options.workflow;

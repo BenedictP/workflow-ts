@@ -82,6 +82,8 @@ runtime.dispose();
 
 ## Testing workers
 
+In test environments, workers run automatically (`NODE_ENV === 'test'`, or `globalThis.vi` / `globalThis.jest`).
+
 ### Approach 1: run real async workers with controlled completion
 
 This verifies real worker wiring and lifecycle without flaky `setTimeout(...)` waits.

@@ -146,6 +146,60 @@ function SearchComponent() {
 - `updateProps: (props: P) => void` - Update props
 - `snapshot: () => string | undefined` - Get state snapshot
 
+## Next.js and SSR hydration
+
+`@workflow-ts/react` is compatible with Next.js SSR/hydration when the initial render is deterministic.
+
+Rules:
+
+1. Call `useWorkflow` and `useWorkflowWithState` only in Client Components (`'use client'`).
+2. Ensure first render output is identical for server and client with the same props.
+3. Avoid time/random/browser-only branches in initial workflow render paths.
+
+Worker caveat:
+
+- `ctx.runWorker(...)` starts workers from render logic.
+- Worker execution is automatic by environment:
+  - browser-like (`window` + `document`): allowed
+  - React Native (`navigator.product === 'ReactNative'`): allowed
+  - test runtimes (`NODE_ENV === 'test'`, `globalThis.vi`, or `globalThis.jest`): allowed
+  - server-like non-test runtimes (for example Next.js SSR): blocked
+
+Recommended App Router usage:
+
+```tsx
+// app/page.tsx (Server Component)
+import { ScreenClient } from './ScreenClient';
+
+export default async function Page() {
+  const initial = await fetchInitialData();
+  return <ScreenClient initial={initial} />;
+}
+```
+
+```tsx
+// app/ScreenClient.tsx (Client Component)
+'use client';
+
+import { useWorkflow } from '@workflow-ts/react';
+
+export function ScreenClient({ initial }: { initial: InitialData }) {
+  const rendering = useWorkflow(workflow, initial);
+  return <Renderer rendering={rendering} />;
+}
+```
+
+Anti-pattern (hydration mismatch risk):
+
+```tsx
+const workflow: Workflow<void, State, never, Rendering> = {
+  initialState: () => ({ now: Date.now() }),
+  render: (_props, state) => ({ label: String(state.now) }),
+};
+```
+
+More details: [Next.js SSR & Hydration](../../docs/guides/nextjs-ssr-hydration.md).
+
 ## React Native lifecycle example
 
 Use `AppState` to pause runtime activity while the app is backgrounded:

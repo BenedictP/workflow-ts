@@ -37,6 +37,7 @@ Not a good fit:
 ## Runtime API
 
 The `createRuntime(workflow, props, config?)` call returns a runtime instance. For backward compatibility, the third argument can also be a plain output callback.
+Worker execution is automatic by environment: browser-like, React Native, and test runtimes run workers; server-like non-test runtimes block workers.
 
 | Method                      | Description                                                                                                                 |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |

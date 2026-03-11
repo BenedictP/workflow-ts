@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { WorkflowRuntime, type Workflow } from '@workflow-ts/core';
+import { createWorker, WorkflowRuntime, type Workflow } from '@workflow-ts/core';
 import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,8 +11,6 @@ const flushTimers = async (): Promise<void> => {
     setTimeout(resolve, 0);
   });
 };
-
-
 // ============================================================
 // Test Types
 // ============================================================
@@ -163,6 +161,30 @@ const anyPropsWorkflow: Workflow<{ value: AllowedProp }, null, never, { value: A
   render: (props) => ({
     value: props.value,
   }),
+};
+
+interface WorkerPolicyState {
+  readonly value: number;
+}
+
+interface WorkerPolicyRendering {
+  readonly value: number;
+}
+
+const workerPolicyWorkflow: Workflow<void, WorkerPolicyState, never, WorkerPolicyRendering> = {
+  initialState: () => ({ value: 0 }),
+  render: (_props, state, ctx) => {
+    if (state.value === 0) {
+      ctx.runWorker(
+        createWorker('worker-policy', async () => 1),
+        'worker-policy',
+        (value) => () => ({
+          state: { value },
+        }),
+      );
+    }
+    return { value: state.value };
+  },
 };
 
 // ============================================================
@@ -1185,6 +1207,20 @@ describe('useWorkflow', () => {
       result.current.onIncrement();
     });
     expect(result.current.count).toBe(1);
+
+    unmount();
+  });
+
+  it('should allow workers by default in browser-like environments', async () => {
+    const { result, unmount } = renderHook(() => useWorkflow(workerPolicyWorkflow, undefined));
+
+    expect(result.current.value).toBe(0);
+
+    await act(async () => {
+      await flushTimers();
+    });
+
+    expect(result.current.value).toBe(1);
 
     unmount();
   });

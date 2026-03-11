@@ -12,7 +12,8 @@ If you are new to the library, start with Overview, then When to Use, then the r
 1. [Overview](./guides/overview.md)
 2. [When to Use](./guides/when-to-use.md)
 3. [React Integration](./guides/react.md)
-4. [README Profile Example](../examples/readme-profile/README.md)
+4. [Next.js SSR & Hydration](./guides/nextjs-ssr-hydration.md)
+5. [README Profile Example](../examples/readme-profile/README.md)
 
 ## Workflow Mechanics
 

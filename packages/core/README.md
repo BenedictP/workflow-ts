@@ -118,6 +118,13 @@ const runtime = createRuntime(workflow, props, (output) => {
   - `devTools?: DevTools<S, O, R>` - Runtime inspection and event logging
   - `propsEqual?: (prev: P, next: P) => boolean` - Props equality comparator used by this runtime's `updateProps` and `onPropsChanged` (defaults to `Object.is`; not inherited by child runtimes)
 
+Worker execution is automatic by environment:
+
+- Browser-like environments (`window` + `document`): workers run.
+- React Native (`navigator.product === 'ReactNative'`): workers run.
+- Test environments (`NODE_ENV === 'test'`, or `globalThis.vi`/`globalThis.jest`): workers run.
+- Server-like non-test environments (for example Next.js SSR in Node): workers are blocked.
+
 For practical interceptor patterns (analytics/logging/debug/composition), see the
 [Interceptors guide](../../docs/guides/interceptors.md).
 
@@ -182,6 +189,7 @@ interface RenderContext<S, O> {
 - Same key + still running: worker stays alive (no restart), handlers are updated.
 - Same key after completion: starts a fresh worker run.
 - If not called in a render pass: cancelled at end of render cycle.
+- Execution is environment-aware: workers run in browser-like, React Native, and test runtimes; server-like non-test runtimes block workers.
 
 For full lifecycle details and one-shot analytics/idempotency guidance, see [Workers guide](../../docs/guides/workers.md).
 

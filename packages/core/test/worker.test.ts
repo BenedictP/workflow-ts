@@ -119,6 +119,7 @@ function createInstrumentedAbortController(): {
   };
 }
 
+
 // ============================================================
 // WorkerManager Tests
 // ============================================================
@@ -467,6 +468,348 @@ describe('Workflow with workers', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(runtime.getState().count).toBe(0);
+  });
+});
+
+// ============================================================
+// Worker execution environment tests
+// ============================================================
+
+const setGlobalForWorkerTest = (key: string, value: unknown): (() => void) => {
+  const runtimeGlobals = globalThis as Record<string, unknown>;
+  const hadOwnKey = Object.prototype.hasOwnProperty.call(runtimeGlobals, key);
+  const previousDescriptor = hadOwnKey ? Object.getOwnPropertyDescriptor(runtimeGlobals, key) : undefined;
+
+  if (previousDescriptor?.configurable === false) {
+    const previousValue = runtimeGlobals[key];
+    runtimeGlobals[key] = value;
+    return () => {
+      runtimeGlobals[key] = previousValue;
+    };
+  }
+
+  Object.defineProperty(runtimeGlobals, key, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: previousDescriptor?.enumerable ?? true,
+  });
+
+  return () => {
+    if (hadOwnKey && previousDescriptor !== undefined) {
+      Object.defineProperty(runtimeGlobals, key, previousDescriptor);
+      return;
+    }
+    Reflect.deleteProperty(runtimeGlobals, key);
+  };
+};
+
+describe('Worker execution environment guard', () => {
+  it('blocks workers in server-like non-test environments and warns once per key', async () => {
+    const warningSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const previousNodeEnv = process.env.NODE_ENV;
+    const restoreGlobals = [
+      setGlobalForWorkerTest('window', undefined),
+      setGlobalForWorkerTest('document', undefined),
+      setGlobalForWorkerTest('navigator', undefined),
+      setGlobalForWorkerTest('vi', undefined),
+      setGlobalForWorkerTest('jest', undefined),
+      setGlobalForWorkerTest('__DEV__', true),
+    ];
+    process.env.NODE_ENV = 'production';
+
+    let workerRuns = 0;
+    const testWorker = createWorker('blocked-worker', async () => {
+      workerRuns += 1;
+      return 'done';
+    });
+
+    interface State {
+      readonly count: number;
+    }
+    interface Rendering {
+      readonly count: number;
+      readonly bump: () => void;
+    }
+
+    const workflow: Workflow<void, State, never, Rendering> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(testWorker, 'blocked-key', () => (s) => ({ state: s }));
+        return {
+          count: state.count,
+          bump: () => {
+            ctx.actionSink.send((s) => ({ state: { count: s.count + 1 } }));
+          },
+        };
+      },
+    };
+
+    try {
+      const runtime = createRuntime(workflow, undefined);
+      runtime.getRendering().bump();
+      runtime.getRendering().bump();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(workerRuns).toBe(0);
+      expect(warningSpy).toHaveBeenCalledTimes(1);
+      expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('blocked in this environment'));
+
+      runtime.dispose();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (restoreGlobals.length > 0) {
+        restoreGlobals.pop()?.();
+      }
+      warningSpy.mockRestore();
+    }
+  });
+
+  it('allows workers in browser-like environments', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const restoreGlobals = [
+      setGlobalForWorkerTest('window', {}),
+      setGlobalForWorkerTest('document', {}),
+      setGlobalForWorkerTest('navigator', undefined),
+      setGlobalForWorkerTest('vi', undefined),
+      setGlobalForWorkerTest('jest', undefined),
+    ];
+    process.env.NODE_ENV = 'production';
+
+    let workerRuns = 0;
+    const testWorker = createWorker('browser-worker', async () => {
+      workerRuns += 1;
+      return 1;
+    });
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(testWorker, 'browser-key', (value) => () => ({ state: { count: value } }));
+        }
+        return { count: state.count };
+      },
+    };
+
+    try {
+      const runtime = createRuntime(workflow, undefined);
+      runtime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(workerRuns).toBe(1);
+      expect(runtime.getState().count).toBe(1);
+      runtime.dispose();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (restoreGlobals.length > 0) {
+        restoreGlobals.pop()?.();
+      }
+    }
+  });
+
+  it('allows workers in React Native-like environments without document', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const restoreGlobals = [
+      setGlobalForWorkerTest('window', undefined),
+      setGlobalForWorkerTest('document', undefined),
+      setGlobalForWorkerTest('navigator', { product: 'ReactNative' }),
+      setGlobalForWorkerTest('vi', undefined),
+      setGlobalForWorkerTest('jest', undefined),
+    ];
+    process.env.NODE_ENV = 'production';
+
+    let workerRuns = 0;
+    const testWorker = createWorker('react-native-worker', async () => {
+      workerRuns += 1;
+      return 1;
+    });
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(testWorker, 'react-native-key', (value) => () => ({ state: { count: value } }));
+        }
+        return { count: state.count };
+      },
+    };
+
+    try {
+      const runtime = createRuntime(workflow, undefined);
+      runtime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(workerRuns).toBe(1);
+      expect(runtime.getState().count).toBe(1);
+      runtime.dispose();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (restoreGlobals.length > 0) {
+        restoreGlobals.pop()?.();
+      }
+    }
+  });
+
+  it('allows workers in test environments', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const restoreGlobals = [
+      setGlobalForWorkerTest('window', undefined),
+      setGlobalForWorkerTest('document', undefined),
+      setGlobalForWorkerTest('navigator', undefined),
+      setGlobalForWorkerTest('vi', undefined),
+      setGlobalForWorkerTest('jest', undefined),
+    ];
+    process.env.NODE_ENV = 'test';
+
+    let workerRuns = 0;
+    const testWorker = createWorker('test-env-worker', async () => {
+      workerRuns += 1;
+      return 1;
+    });
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(testWorker, 'test-env-key', (value) => () => ({ state: { count: value } }));
+        }
+        return { count: state.count };
+      },
+    };
+
+    try {
+      const runtime = createRuntime(workflow, undefined);
+      runtime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(workerRuns).toBe(1);
+      expect(runtime.getState().count).toBe(1);
+      runtime.dispose();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (restoreGlobals.length > 0) {
+        restoreGlobals.pop()?.();
+      }
+    }
+  });
+
+  it('allows workers when a known test global is present', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const restoreGlobals = [
+      setGlobalForWorkerTest('window', undefined),
+      setGlobalForWorkerTest('document', undefined),
+      setGlobalForWorkerTest('navigator', undefined),
+      setGlobalForWorkerTest('vi', {}),
+      setGlobalForWorkerTest('jest', undefined),
+    ];
+    process.env.NODE_ENV = 'production';
+
+    let workerRuns = 0;
+    const testWorker = createWorker('test-global-worker', async () => {
+      workerRuns += 1;
+      return 1;
+    });
+
+    const workflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(testWorker, 'test-global-key', (value) => () => ({ state: { count: value } }));
+        }
+        return { count: state.count };
+      },
+    };
+
+    try {
+      const runtime = createRuntime(workflow, undefined);
+      runtime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(workerRuns).toBe(1);
+      expect(runtime.getState().count).toBe(1);
+      runtime.dispose();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (restoreGlobals.length > 0) {
+        restoreGlobals.pop()?.();
+      }
+    }
+  });
+
+  it('applies the same environment guard for child runtimes', async () => {
+    const warningSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const previousNodeEnv = process.env.NODE_ENV;
+    let childRuns = 0;
+
+    const childWorker = createWorker('child-worker', async () => {
+      childRuns += 1;
+      return 1;
+    });
+
+    const childWorkflow: Workflow<void, { count: number }, never, { count: number }> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(childWorker, 'child-worker-key', (value) => () => ({ state: { count: value } }));
+        }
+        return { count: state.count };
+      },
+    };
+
+    const parentWorkflow: Workflow<void, { done: boolean }, never, { childCount: number }> = {
+      initialState: () => ({ done: false }),
+      render: (_props, state, ctx) => {
+        const child = ctx.renderChild(childWorkflow, undefined, 'child');
+        return { childCount: child.count + (state.done ? 1 : 0) };
+      },
+    };
+
+    const blockedRestores = [
+      setGlobalForWorkerTest('window', undefined),
+      setGlobalForWorkerTest('document', undefined),
+      setGlobalForWorkerTest('navigator', undefined),
+      setGlobalForWorkerTest('vi', undefined),
+      setGlobalForWorkerTest('jest', undefined),
+    ];
+    process.env.NODE_ENV = 'production';
+
+    try {
+      const blockedRuntime = createRuntime(parentWorkflow, undefined);
+      blockedRuntime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(childRuns).toBe(0);
+      blockedRuntime.dispose();
+
+      while (blockedRestores.length > 0) {
+        blockedRestores.pop()?.();
+      }
+
+      const allowedRestores = [
+        setGlobalForWorkerTest('window', {}),
+        setGlobalForWorkerTest('document', {}),
+        setGlobalForWorkerTest('navigator', undefined),
+        setGlobalForWorkerTest('vi', undefined),
+        setGlobalForWorkerTest('jest', undefined),
+      ];
+
+      childRuns = 0;
+      const allowedRuntime = createRuntime(parentWorkflow, undefined);
+      allowedRuntime.getRendering();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(childRuns).toBe(1);
+      allowedRuntime.dispose();
+
+      while (allowedRestores.length > 0) {
+        allowedRestores.pop()?.();
+      }
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      while (blockedRestores.length > 0) {
+        blockedRestores.pop()?.();
+      }
+      warningSpy.mockRestore();
+    }
   });
 });
 

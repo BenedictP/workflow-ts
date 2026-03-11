@@ -37,6 +37,15 @@ render: (_props, state, ctx) => {
 4. If a key is not called in a render pass, that worker is cancelled at the end of the render cycle.
 5. Disposing the runtime cancels all active workers.
 
+## Execution environments (automatic)
+
+Worker execution is environment-aware and does not require a runtime option:
+
+- Browser-like environments (`window` + `document`): workers run.
+- React Native (`navigator.product === 'ReactNative'`): workers run.
+- Test runtimes (`NODE_ENV === 'test'`, or `globalThis.vi` / `globalThis.jest`): workers run.
+- Server-like non-test runtimes (for example Next.js SSR in Node): workers are blocked.
+
 ### Function/Handler Changes with Same Key
 
 If you call `runWorker` again with the same key while a worker is running:

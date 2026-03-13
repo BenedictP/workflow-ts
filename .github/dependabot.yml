@@ -2,35 +2,73 @@ version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 6
     reviewers:
-      - "openclaw"
+      - "BenedictP"
     labels:
       - "dependencies"
+      - "npm"
     commit-message:
       prefix: "chore"
       include: "scope"
     groups:
-      typescript-eslint:
+      linting:
         patterns:
           - "@typescript-eslint/*"
+          - "eslint"
+          - "eslint-*"
+          - "eslint-config-*"
+          - "eslint-plugin-*"
+          - "eslint-import-resolver-typescript"
+          - "prettier"
+      types-build-toolchain:
+        patterns:
+          - "typescript"
+          - "@types/node"
+          - "tsup"
       testing:
         patterns:
           - "vitest"
           - "@vitest/*"
           - "@testing-library/*"
+          - "happy-dom"
+          - "jsdom"
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
     reviewers:
-      - "openclaw"
+      - "BenedictP"
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
+      include: "scope"
+    groups:
+      core-ci-actions:
+        patterns:
+          - "actions/checkout"
+          - "actions/setup-node"
+          - "pnpm/action-setup"
+      ancillary-actions:
+        patterns:
+          - "github/codeql-action*"
+          - "actions/upload-artifact"

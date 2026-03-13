@@ -30,7 +30,7 @@
     "readme:verify-example": "node scripts/verify-readme-example.mjs"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^8.56.0",

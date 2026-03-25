@@ -772,7 +772,7 @@ describe('useWorkflow', () => {
           queryProps,
         ),
       );
-    }).toThrowError(/Unsupported workflow props at "props": SearchQueryProps/);
+    }).toThrow(/Unsupported workflow props at "props": SearchQueryProps/);
   });
 
   it('should throw for nested unsupported branded objects with path details', () => {
@@ -786,7 +786,7 @@ describe('useWorkflow', () => {
 
     expect(() => {
       renderHook(() => useWorkflow(anyPropsWorkflow, props));
-    }).toThrowError(/Unsupported workflow props at "props\.value\.payload\.resource": URL/);
+    }).toThrow(/Unsupported workflow props at "props\.value\.payload\.resource": URL/);
   });
 
   it('should throw for Promise, WeakMap, and WeakSet props', () => {
@@ -799,7 +799,7 @@ describe('useWorkflow', () => {
             value: unsupportedValue as unknown as AllowedProp,
           }),
         );
-      }).toThrowError(/Unsupported workflow props at "props\.value"/);
+      }).toThrow(/Unsupported workflow props at "props\.value"/);
     }
   });
 
@@ -815,7 +815,7 @@ describe('useWorkflow', () => {
         renderHook(() =>
           useWorkflow(anyPropsWorkflow, { value: new URL('https://example.com') as unknown as AllowedProp }),
         );
-      }).toThrowError(/Unsupported workflow props at "props\.value": URL/);
+      }).toThrow(/Unsupported workflow props at "props\.value": URL/);
     } finally {
       process.env.NODE_ENV = previousNodeEnv;
       if (previousDev === undefined) {
@@ -1336,7 +1336,7 @@ describe('useWorkflowWithState', () => {
           { props: initialProps },
         ),
       );
-    }).toThrowError(/Unsupported workflow props at "props": SearchQueryProps/);
+    }).toThrow(/Unsupported workflow props at "props": SearchQueryProps/);
   });
 
   it('should throw for unsupported props passed to updateProps', () => {
@@ -1350,7 +1350,7 @@ describe('useWorkflowWithState', () => {
           value: new Error('boom') as unknown as AllowedProp,
         } as { value: AllowedProp });
       });
-    }).toThrowError(/Unsupported workflow props at "props\.value": Error/);
+    }).toThrow(/Unsupported workflow props at "props\.value": Error/);
 
     unmount();
   });

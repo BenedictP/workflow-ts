@@ -13,7 +13,7 @@ export type Props<T> = T;
 /**
  * Convenience alias for workflows with no props.
  */
-// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+ 
 export type NoProps = void;
 
 /**

@@ -23,9 +23,7 @@ jobs:
           node-version: '20'
       
       - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+        uses: pnpm/action-setup@v5
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -48,9 +46,7 @@ jobs:
           node-version: '20'
       
       - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+        uses: pnpm/action-setup@v5
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -73,9 +69,7 @@ jobs:
           node-version: '20'
       
       - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+        uses: pnpm/action-setup@v5
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -99,9 +93,7 @@ jobs:
           node-version: '20'
       
       - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+        uses: pnpm/action-setup@v5
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

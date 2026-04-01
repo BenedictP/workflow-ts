@@ -109,11 +109,52 @@ jobs:
             packages/*/dist
           retention-days: 7
 
+  release-readiness:
+    name: Release Readiness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify package versions stay aligned for release tags
+        run: |
+          CORE_VERSION="$(node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync('packages/core/package.json', 'utf8')).version)")"
+          REACT_VERSION="$(node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync('packages/react/package.json', 'utf8')).version)")"
+          if [ "$CORE_VERSION" != "$REACT_VERSION" ]; then
+            echo "Package versions must match for a single repo release tag."
+            echo "@workflow-ts/core=$CORE_VERSION"
+            echo "@workflow-ts/react=$REACT_VERSION"
+            exit 1
+          fi
+
+      - name: Verify @workflow-ts/core publish dry-run
+        working-directory: packages/core
+        run: pnpm publish --access public --no-git-checks --dry-run
+
+      - name: Verify @workflow-ts/react publish dry-run
+        working-directory: packages/react
+        run: pnpm publish --access public --no-git-checks --dry-run
+
   # Run all checks together for status checks
   ci:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [typecheck, lint, test, build]
+    needs: [typecheck, lint, test, build, release-readiness]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -121,7 +162,8 @@ jobs:
           if [[ "${{ needs.typecheck.result }}" != "success" || \
                 "${{ needs.lint.result }}" != "success" || \
                 "${{ needs.test.result }}" != "success" || \
-                "${{ needs.build.result }}" != "success" ]]; then
+                "${{ needs.build.result }}" != "success" || \
+                "${{ needs.release-readiness.result }}" != "success" ]]; then
             echo "One or more CI jobs failed"
             exit 1
           fi

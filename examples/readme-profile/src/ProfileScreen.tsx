@@ -38,6 +38,9 @@ export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
           <button onClick={rendering.close}>Close</button>
         </section>
       );
+    default:
+      // Exhaustiveness check - this should never happen
+      throw new Error(`Unknown rendering type: ${(rendering as {type: string}).type}`);
   }
 }
 // README_SNIPPET_END: react

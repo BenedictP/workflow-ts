@@ -29,16 +29,24 @@
     "publish": "pnpm -r build && pnpm -r publish --access public",
     "readme:verify-example": "node scripts/verify-readme-example.mjs"
   },
+  "pnpm": {
+    "overrides": {
+      "minimatch@^3.0.0": "^3.1.4",
+      "rollup@^4.0.0": "^4.59.0",
+      "brace-expansion@^1.0.0": "^1.1.13",
+      "yaml@^2.0.0": "^2.8.3"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.2",
-    "globals": "^17.4.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.1",
-    "eslint-import-resolver-typescript": "^4.3.1",
-    "eslint-plugin-import": "^2.31.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.4.0",
     "prettier": "^3.5.3",
     "typescript": "^6.0.2"
   }

@@ -16,6 +16,12 @@ TypeScript implementation of Square's [Workflow architecture](https://developer.
 - Async work with render-scoped lifecycle via workers
 - UI-agnostic core runtime with React hooks in a separate package
 
+### Further reading
+
+- [Your UI Has States — Start Treating Them That Way](https://medium.com/@benedict.pregler/your-ui-has-states-start-treating-them-that-way-ade30be1e72e)
+- [Zustand Gives You Freedom, workflow-ts Gives You Guardrails](https://medium.com/@benedict.pregler/zustand-gives-you-freedom-workflow-ts-gives-you-guardrails-6d4634b724aa)
+- [Stop Writing State Machine Config, Start Writing Functions](https://medium.com/@benedict.pregler/stop-writing-state-machine-config-start-writing-functions-50254e3daa39)
+
 ## When to use it
 
 Use workflow-ts when you want explicit, deterministic state transitions and a clear separation between business logic orchestration and UI rendering.

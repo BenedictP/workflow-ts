@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { memoryStorage, type SyncStorage, type Workflow } from '@workflow-ts/core';
+import { memoryStorage, type PersistStorage, type SyncStorage, type Workflow } from '@workflow-ts/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { usePersistedWorkflow, type PersistKeyResolver } from '../src/usePersistedWorkflow';
@@ -151,7 +151,8 @@ describe('usePersistedWorkflow', () => {
 
     expect(result.current.rendering.count).toBe(5);
     expect(result.current.state.count).toBe(5);
-    expect(result.current.hydration.status).toBe('hydrated');
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(true);
   });
 
   it('rehydrate:none does not read from storage', () => {
@@ -172,8 +173,74 @@ describe('usePersistedWorkflow', () => {
     );
 
     expect(result.current.rendering.count).toBe(0);
-    expect(result.current.hydration.status).toBe('idle');
+    expect(result.current.persistence.phase).toBe('idle');
+    expect(result.current.persistence.isHydrated).toBe(false);
     expect(getItem).not.toHaveBeenCalled();
+  });
+
+  it('hydrates from async storage in lazy mode', async () => {
+    const storage: PersistStorage = {
+      getItem: vi.fn(async () => envelope('{"count":6}')),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const { result } = renderHook(() =>
+      usePersistedWorkflow(counterWorkflow, {
+        props: undefined,
+        persist: {
+          storage,
+          key: 'counter',
+          version: PERSIST_VERSION,
+          rehydrate: 'lazy',
+          serialize: counterSerialize,
+          deserialize: counterDeserialize,
+        },
+      }),
+    );
+
+    expect(result.current.rendering.count).toBe(0);
+    expect(result.current.persistence.phase).toBe('rehydrating');
+    expect(result.current.persistence.isHydrated).toBe(false);
+
+    await waitForMicrotasks();
+
+    expect(result.current.rendering.count).toBe(6);
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(true);
+    expect(result.current.persistence.lastRehydratedAt).toEqual(expect.any(Number));
+  });
+
+  it('marks persistence ready when async storage resolves with no value', async () => {
+    const storage: PersistStorage = {
+      getItem: vi.fn(async () => null),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const { result } = renderHook(() =>
+      usePersistedWorkflow(counterWorkflow, {
+        props: undefined,
+        persist: {
+          storage,
+          key: 'counter',
+          version: PERSIST_VERSION,
+          rehydrate: 'lazy',
+          serialize: counterSerialize,
+          deserialize: counterDeserialize,
+        },
+      }),
+    );
+
+    expect(result.current.persistence.phase).toBe('rehydrating');
+    expect(result.current.persistence.isHydrated).toBe(false);
+
+    await waitForMicrotasks();
+
+    expect(result.current.rendering.count).toBe(0);
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(true);
+    expect(result.current.persistence.lastRehydratedAt).toEqual(expect.any(Number));
   });
 
   it('persists state transitions as versioned envelopes', async () => {
@@ -201,6 +268,7 @@ describe('usePersistedWorkflow', () => {
 
     expect(setItem).toHaveBeenNthCalledWith(1, 'counter', envelope('{"count":1}'));
     expect(setItem).toHaveBeenNthCalledWith(2, 'counter', envelope('{"count":2}'));
+    expect(result.current.persistence.lastPersistedAt).toEqual(expect.any(Number));
   });
 
   it('does not recreate runtime from inline storage adapter identity churn', async () => {
@@ -296,7 +364,8 @@ describe('usePersistedWorkflow', () => {
     );
 
     expect(result.current.rendering.count).toBe(1);
-    expect(result.current.hydration.status).toBe('hydrated');
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(true);
     expect(onRehydrate).toHaveBeenCalledWith('{"count":1}');
 
     act(() => {
@@ -532,9 +601,10 @@ describe('usePersistedWorkflow', () => {
 
     await waitForMicrotasks();
 
-    expect(result.current.hydration.status).toBe('error');
-    expect(result.current.hydration.error).toBeInstanceOf(Error);
-    expect((result.current.hydration.error as Error).message).toBe('rehydrate read failed');
+    expect(result.current.persistence.phase).toBe('error');
+    expect(result.current.persistence.isHydrated).toBe(false);
+    expect(result.current.persistence.error).toBeInstanceOf(Error);
+    expect((result.current.persistence.error as Error).message).toBe('rehydrate read failed');
   });
 
   it('preserves state, updateProps and snapshot behavior', async () => {

@@ -22,10 +22,11 @@ You must provide both:
 You can also pass a custom async storage implementation (`getItem/setItem/removeItem` returning `Promise`s).
 
 When using React persisted hooks, keep storage adapter instances stable (module scope or `useMemo`).
+React hooks use lazy/non-blocking rehydrate semantics for async storage.
 
-## Sync API (`createPersistedRuntime`)
+## `createPersistedRuntime` (sync return, lazy rehydrate)
 
-Use this with sync storage (`localStorage`, `sessionStorage`, memory).
+Use this when you need synchronous runtime creation. It accepts both sync and async storage.
 
 ```ts
 import { createPersistedRuntime, localStorageStorage } from '@workflow-ts/core';
@@ -45,6 +46,8 @@ Supported rehydrate modes:
 
 - `'none'`: skip loading persisted data.
 - `'lazy'` (default): create runtime first, then apply persisted snapshot if found.
+  - Sync storage reads happen during creation.
+  - Async storage reads resolve later and hydrate non-blockingly.
 
 ## Async API (`createPersistedRuntimeAsync`)
 

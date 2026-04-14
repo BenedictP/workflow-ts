@@ -1,4 +1,4 @@
-import type { PersistErrorContext, SyncStorage, Workflow } from '@workflow-ts/core';
+import type { PersistErrorContext, PersistStorage, Workflow } from '@workflow-ts/core';
 import { createPersistedRuntime, memoryStorage, WorkflowRuntime } from '@workflow-ts/core';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
@@ -12,47 +12,49 @@ import type { UseWorkflowResult } from './useWorkflow';
 
 export type PersistKeyResolver<P> = string | ((props: P) => string);
 
-export type PersistHydrationStatus = 'idle' | 'rehydrating' | 'hydrated' | 'error';
+export type PersistPhase = 'idle' | 'rehydrating' | 'ready' | 'error';
 
-export interface PersistHydrationState {
-  readonly status: PersistHydrationStatus;
+export interface PersistState {
+  readonly phase: PersistPhase;
   readonly error?: unknown;
-  readonly rehydratedAt?: number;
+  readonly lastRehydratedAt?: number;
+  readonly lastPersistedAt?: number;
+  readonly isHydrated: boolean;
 }
 
-interface HydrationStore {
-  readonly getSnapshot: () => PersistHydrationState;
+interface PersistenceStore {
+  readonly getSnapshot: () => PersistState;
   readonly subscribe: (listener: () => void) => () => void;
-  readonly setSnapshot: (next: PersistHydrationState) => void;
-  readonly replaceSnapshot: (next: PersistHydrationState) => void;
+  readonly setSnapshot: (next: PersistState) => void;
+  readonly replaceSnapshot: (next: PersistState) => void;
 }
 
-const createHydrationStore = (): HydrationStore => {
-  let snapshot: PersistHydrationState = { status: 'idle' };
+const createPersistenceStore = (): PersistenceStore => {
+  let snapshot: PersistState = { phase: 'idle', isHydrated: false };
   const listeners = new Set<() => void>();
 
   return {
-    getSnapshot: (): PersistHydrationState => snapshot,
+    getSnapshot: (): PersistState => snapshot,
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
       };
     },
-    setSnapshot: (next: PersistHydrationState): void => {
+    setSnapshot: (next: PersistState): void => {
       snapshot = next;
       listeners.forEach((listener) => {
         listener();
       });
     },
-    replaceSnapshot: (next: PersistHydrationState): void => {
+    replaceSnapshot: (next: PersistState): void => {
       snapshot = next;
     },
   };
 };
 
 export interface ReactPersistConfig<P, S, O, R> {
-  readonly storage: SyncStorage;
+  readonly storage: PersistStorage;
   readonly key: PersistKeyResolver<P>;
   readonly version: number;
   readonly rehydrate?: 'none' | 'lazy';
@@ -81,7 +83,7 @@ export interface UsePersistedWorkflowResult<P extends AllowedProp, S, R> extends
   S,
   R
 > {
-  readonly hydration: PersistHydrationState;
+  readonly persistence: PersistState;
 }
 
 const resolvePersistKey = <P>(resolver: PersistKeyResolver<P>, props: P): string => {
@@ -92,10 +94,17 @@ const isServerLikeEnvironment = (): boolean => {
   return typeof window === 'undefined';
 };
 
+const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  return typeof (value as { readonly then?: unknown }).then === 'function';
+};
+
 const getSafeStorage = (
-  storage: SyncStorage,
-  serverFallbackRef: { current: SyncStorage | null },
-): SyncStorage => {
+  storage: PersistStorage,
+  serverFallbackRef: { current: PersistStorage | null },
+): PersistStorage => {
   if (!isServerLikeEnvironment()) {
     return storage;
   }
@@ -113,11 +122,11 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const lastSnapshotStringRef = useRef<string | undefined>(undefined);
   const shouldBeActiveRef = useRef(true);
 
-  const hydrationStoreRef = useRef<HydrationStore | null>(null);
-  if (hydrationStoreRef.current === null) {
-    hydrationStoreRef.current = createHydrationStore();
+  const persistenceStoreRef = useRef<PersistenceStore | null>(null);
+  if (persistenceStoreRef.current === null) {
+    persistenceStoreRef.current = createPersistenceStore();
   }
-  const hydrationStore = hydrationStoreRef.current;
+  const persistenceStore = persistenceStoreRef.current;
   const isCreatingRuntimeRef = useRef(false);
 
   const persist = options.persist;
@@ -131,7 +140,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const onErrorRef = useRef(persist.onError);
   onErrorRef.current = persist.onError;
 
-  const serverFallbackStorageRef = useRef<SyncStorage | null>(null);
+  const serverFallbackStorageRef = useRef<PersistStorage | null>(null);
   const effectiveStorage = getSafeStorage(persist.storage, serverFallbackStorageRef);
 
   const resolvedKey = resolvePersistKey(persist.key, options.props);
@@ -157,22 +166,62 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
     ): WorkflowRuntime<P, S, O, R> => {
       const rehydrateMode = persist.rehydrate ?? 'lazy';
       if (rehydrateMode === 'none') {
-        hydrationStore.replaceSnapshot({ status: 'idle' });
+        persistenceStore.replaceSnapshot({ phase: 'idle', isHydrated: false });
       } else {
-        hydrationStore.replaceSnapshot({ status: 'rehydrating' });
+        persistenceStore.replaceSnapshot({ phase: 'rehydrating', isHydrated: false });
       }
-      const publishHydrationState = (next: PersistHydrationState): void => {
+      const publishPersistenceState = (next: PersistState): void => {
         if (isCreatingRuntimeRef.current) {
-          hydrationStore.replaceSnapshot(next);
+          persistenceStore.replaceSnapshot(next);
           return;
         }
-        hydrationStore.setSnapshot(next);
+        persistenceStore.setSnapshot(next);
+      };
+      const markRehydratedWithoutSnapshot = (): void => {
+        const current = persistenceStore.getSnapshot();
+        if (current.phase !== 'rehydrating') {
+          return;
+        }
+        publishPersistenceState({
+          ...current,
+          phase: 'ready',
+          error: undefined,
+          isHydrated: true,
+          lastRehydratedAt: Date.now(),
+        });
+      };
+      const trackedStorage: PersistStorage = {
+        getItem: (key: string): string | null | Promise<string | null> => {
+          const value = effectiveStorage.getItem(key);
+
+          if (rehydrateMode === 'lazy') {
+            if (isPromiseLike<string | null>(value)) {
+              void value
+                .then((resolvedValue) => {
+                  if (resolvedValue === null) {
+                    markRehydratedWithoutSnapshot();
+                  }
+                })
+                .catch(() => undefined);
+            } else if (value === null) {
+              markRehydratedWithoutSnapshot();
+            }
+          }
+
+          return value;
+        },
+        setItem: (key: string, value: string): void | Promise<void> => {
+          return effectiveStorage.setItem(key, value);
+        },
+        removeItem: (key: string): void | Promise<void> => {
+          return effectiveStorage.removeItem(key);
+        },
       };
 
       isCreatingRuntimeRef.current = true;
       try {
         const runtime = createPersistedRuntime(workflowToRun, runtimeProps, {
-          storage: effectiveStorage,
+          storage: trackedStorage,
           key: resolvedKey,
           version: persist.version,
           rehydrate: rehydrateMode,
@@ -182,32 +231,37 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           migrate: persist.migrate,
           onOutput: runtimeOnOutput,
           onPersist: (snapshot: string) => {
+            const current = persistenceStore.getSnapshot();
+            publishPersistenceState({
+              ...current,
+              lastPersistedAt: Date.now(),
+            });
             onPersistRef.current?.(snapshot);
           },
           onRehydrate: (snapshot: string) => {
-            publishHydrationState({
-              status: 'hydrated',
-              rehydratedAt: Date.now(),
+            const current = persistenceStore.getSnapshot();
+            publishPersistenceState({
+              ...current,
+              phase: 'ready',
+              error: undefined,
+              isHydrated: true,
+              lastRehydratedAt: Date.now(),
             });
             onRehydrateRef.current?.(snapshot);
           },
           onError: (error: unknown, context: PersistErrorContext) => {
             if (context.phase === 'rehydrate') {
-              publishHydrationState({
-                status: 'error',
+              const current = persistenceStore.getSnapshot();
+              publishPersistenceState({
+                ...current,
+                phase: 'error',
                 error,
+                isHydrated: false,
               });
             }
             onErrorRef.current?.(error, context);
           },
         });
-
-        if (rehydrateMode !== 'none' && hydrationStore.getSnapshot().status === 'rehydrating') {
-          hydrationStore.replaceSnapshot({
-            status: 'hydrated',
-            rehydratedAt: Date.now(),
-          });
-        }
 
         return runtime;
       } finally {
@@ -216,7 +270,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
     },
     [
       effectiveStorage,
-      hydrationStore,
+      persistenceStore,
       persist.deserialize,
       persist.migrate,
       persist.rehydrate,
@@ -356,14 +410,14 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
     getWorkflowSnapshot,
   );
 
-  const hydrationSnapshot = useSyncExternalStore(
-    hydrationStore.subscribe,
-    hydrationStore.getSnapshot,
-    hydrationStore.getSnapshot,
+  const persistenceSnapshot = useSyncExternalStore(
+    persistenceStore.subscribe,
+    persistenceStore.getSnapshot,
+    persistenceStore.getSnapshot,
   );
 
   return {
     ...workflowSnapshot,
-    hydration: hydrationSnapshot,
+    persistence: persistenceSnapshot,
   };
 }

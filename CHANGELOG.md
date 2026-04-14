@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** Reworked persistence in `@workflow-ts/core` to a strict codec model with versioned envelopes (`{ v, data }`): persisted runtimes now require explicit `serialize(state)` and `deserialize(raw, props)` in config, with optional `migrate(raw, fromVersion, toVersion)`.
-- **Breaking:** Consolidated `@workflow-ts/react` persisted APIs into one hook, `usePersistedWorkflow(workflow, { props, persist, ...options })`, which returns runtime controls (`rendering/state/props/updateProps/snapshot`) plus hydration state (`idle`/`rehydrating`/`hydrated`/`error`).
-- Removed the stale generated API snapshot directory and consolidated docs source-of-truth to `docs/` plus root/package READMEs.
+- **Breaking:** Redesigned `@workflow-ts/react` persisted hook output to expose `persistence` phase state (`idle`/`rehydrating`/`ready`/`error`) with metadata (`isHydrated`, `lastRehydratedAt`, `lastPersistedAt`) instead of the previous `hydration` shape.
+- React persisted hooks now accept `PersistStorage` (sync or async) with lazy non-blocking rehydrate semantics.
+- `createPersistedRuntime()` now accepts `PersistStorage` directly and supports lazy rehydrate from async `getItem` without requiring async runtime creation.
 
 ### Fixed
 

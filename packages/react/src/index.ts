@@ -12,8 +12,8 @@ export type {
 } from './useWorkflow';
 export type {
   PersistKeyResolver,
-  PersistHydrationState,
-  PersistHydrationStatus,
+  PersistPhase,
+  PersistState,
   ReactPersistConfig,
   UsePersistedWorkflowOptions,
   UsePersistedWorkflowResult,

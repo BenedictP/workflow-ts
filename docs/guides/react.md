@@ -118,7 +118,8 @@ Key behaviors:
 - Key changes recreate runtime so each key gets isolated persisted state.
 - Storage reference changes alone do not recreate runtime.
 - Keep adapter instances stable (module scope or `useMemo`) for predictable storage backend usage.
-- React persisted hooks currently accept sync storage only.
+- React persisted hooks accept sync and async storage adapters.
+- Async storage hydration is lazy/non-blocking in hooks (runtime first, persisted state later).
 - Server-like environments automatically use in-memory storage fallback.
 
 Returned shape:
@@ -128,7 +129,7 @@ Returned shape:
 - `props`
 - `updateProps`
 - `snapshot`
-- `hydration: { status, error?, rehydratedAt? }`
+- `persistence: { phase, error?, isHydrated, lastRehydratedAt?, lastPersistedAt? }`
 
 ## Next.js and SSR hydration
 

@@ -107,7 +107,8 @@ const runtime = createRuntime(workflow, props, (output) => {
 
 ### `createPersistedRuntime(workflow, props, config)`
 
-Create a runtime with automatic snapshot persistence on state transitions.
+Create a runtime with automatic snapshot persistence on state transitions. Runtime creation is
+synchronous and supports lazy rehydrate with both sync and async storage adapters.
 
 ```typescript
 import { createPersistedRuntime, localStorageStorage } from '@workflow-ts/core';
@@ -125,7 +126,7 @@ const runtime = createPersistedRuntime(workflow, props, {
 
 ### `createPersistedRuntimeAsync(workflow, props, config)`
 
-Async variant for async storage and blocking hydration:
+Async variant for explicit async runtime creation and optional blocking hydration:
 
 ```typescript
 import { createPersistedRuntimeAsync } from '@workflow-ts/core';

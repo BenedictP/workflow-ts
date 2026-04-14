@@ -150,7 +150,7 @@ function SearchComponent() {
 
 ### `usePersistedWorkflow(workflow, options)`
 
-Unified persisted hook that combines runtime controls and hydration state.
+Unified persisted hook that combines runtime controls and persistence phase state.
 
 ```tsx
 import { memoryStorage } from '@workflow-ts/core';
@@ -179,12 +179,12 @@ const workflowView = usePersistedWorkflow(workflow, {
 - `props: P`
 - `updateProps: (props: P) => void`
 - `snapshot: () => string | undefined`
-- `hydration: { status: 'idle' | 'rehydrating' | 'hydrated' | 'error'; error?: unknown; rehydratedAt?: number }`
+- `persistence: { phase: 'idle' | 'rehydrating' | 'ready' | 'error'; error?: unknown; isHydrated: boolean; lastRehydratedAt?: number; lastPersistedAt?: number }`
 
 **Options:**
 
 - `props: P` - Required workflow props
-- `persist.storage: SyncStorage` - Sync storage adapter (sync-only in React hooks)
+- `persist.storage: PersistStorage` - Sync or async storage adapter
 - `persist.key: string | ((props: P) => string)` - Required deterministic key resolver
 - `persist.version: number` - Required envelope/schema version
 - `persist.serialize: (state: S) => string` - Required state serializer
@@ -201,7 +201,7 @@ Behavior notes:
 - Storage reference changes alone do not recreate the runtime.
 - Keep adapter instances stable (module scope or `useMemo`) for predictable storage backend usage.
 - In server-like environments, hooks use in-memory storage fallback automatically.
-- Async storage is not supported in React hooks; use core runtime APIs directly for async storage scenarios.
+- Async storage in React hooks is lazy/non-blocking: runtime is created immediately, then persisted state is applied when storage resolves.
 
 ## Next.js and SSR hydration
 

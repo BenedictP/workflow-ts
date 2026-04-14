@@ -1,6 +1,6 @@
 import { named } from './action';
 import { createInterceptor, type Interceptor } from './interceptor';
-import type { AsyncStorage, PersistStorage, SyncStorage } from './persistStorage';
+import type { AsyncStorage, PersistStorage } from './persistStorage';
 import { createRuntime, type RuntimeConfig, type WorkflowRuntime } from './runtime';
 import type { Action, Workflow } from './types';
 
@@ -79,6 +79,13 @@ const toAsyncStorage = (storage: PersistStorage): AsyncStorage => {
       });
     },
   };
+};
+
+const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  return typeof (value as { readonly then?: unknown }).then === 'function';
 };
 
 const validatePersistKey = (key: string): void => {
@@ -396,7 +403,7 @@ export function createPersistedRuntime<P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
   config: PersistConfig<P, S, O, R> & {
-    readonly storage: SyncStorage;
+    readonly storage: PersistStorage;
     readonly rehydrate?: 'none' | 'lazy';
   },
 ): WorkflowRuntime<P, S, O, R> {
@@ -413,10 +420,29 @@ export function createPersistedRuntime<P, S, O, R>(
     return internals.runtime;
   }
 
+  const applyHydrationValue = (storedValue: string | null): void => {
+    if (storedValue === null) {
+      return;
+    }
+    internals.applyHydrationValue(storedValue);
+  };
+
   try {
     const storedValue = config.storage.getItem(config.key);
-    if (storedValue !== null) {
-      internals.applyHydrationValue(storedValue);
+    if (isPromiseLike<string | null>(storedValue)) {
+      void storedValue
+        .then((resolvedValue) => {
+          applyHydrationValue(resolvedValue);
+        })
+        .catch((error) => {
+          reportError(error, {
+            phase: 'rehydrate',
+            operation: 'getItem',
+            key: config.key,
+          });
+        });
+    } else {
+      applyHydrationValue(storedValue);
     }
   } catch (error) {
     reportError(error, {

@@ -347,11 +347,12 @@ More: [Composition & Child Workflows](./docs/guides/composition.md)
 
 ### Snapshots
 
-You can persist and restore workflow state with `snapshot`/`restore`:
+To persist state, call `snapshot(state)` and store the returned string.  
+To restore state, pass that string back through `initialState(props, snapshot)` when creating the runtime:
 
 ```typescript
+initialState: (_props, snapshot) => (snapshot ? JSON.parse(snapshot) : { count: 0 }),
 snapshot: (state) => JSON.stringify(state),
-restore: (snapshot) => JSON.parse(snapshot),
 ```
 
 More: [Snapshots](./docs/guides/snapshots.md)

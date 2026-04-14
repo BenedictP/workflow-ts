@@ -110,6 +110,37 @@ describe('persistRuntime v3', () => {
     expect(runtime.getState()).toEqual({ count: 0 });
   });
 
+  it('sync API lazy mode supports async storage and hydrates later', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+    });
+
+    expect(runtime.getState()).toEqual({ count: 0 });
+
+    resolveGet?.(envelope('{"count":11}'));
+    await waitForMicrotasks();
+
+    expect(runtime.getState()).toEqual({ count: 11 });
+  });
+
   it('async API defaults to blocking and returns hydrated state', async () => {
     const storage: PersistStorage = {
       getItem: vi.fn(async () => envelope('{"count":7}')),

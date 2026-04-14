@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { memoryStorage, type PersistStorage, type SyncStorage, type Workflow } from '@workflow-ts/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { usePersistedWorkflow, type PersistKeyResolver } from '../src/usePersistedWorkflow';
+import { __testing, usePersistedWorkflow, type PersistKeyResolver } from '../src/usePersistedWorkflow';
 
 interface CounterState {
   readonly count: number;
@@ -694,6 +694,14 @@ describe('usePersistedWorkflow', () => {
 
     await waitForMicrotasks();
     expect(result.current.rendering.count).toBe(1);
+  });
+
+  it('treats React Native-like globals as non-server even when window is undefined', () => {
+    vi.stubGlobal('window', undefined);
+    vi.stubGlobal('document', undefined);
+    vi.stubGlobal('navigator', { product: 'ReactNative' });
+
+    expect(__testing.isServerLikeEnvironment()).toBe(false);
   });
 
   it('throws when resolved key is empty', () => {

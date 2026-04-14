@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `usePersistedWorkflow` now warns once in development when `persist.serialize`/`persist.deserialize`/`persist.migrate` function identities change after mount.
 - `usePersistedWorkflow` now throws a clear configuration error when `persist.key` resolves to a non-string value at runtime.
 - React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
+- React persisted-hook server fallback detection now aligns with core environment rules so React Native/test-like environments are not misclassified as server-only.
 - Persist error reporting now classifies thrown `onPersist` callback failures as `operation: 'onPersist'` instead of misreporting them as storage `setItem` failures.
 - Persist error reporting now classifies thrown `onRehydrate` callback failures as `operation: 'onRehydrate'` and keeps runtime hydration/state transitions running.
 - Persist error handling now guards user `onError` callbacks so thrown callback exceptions cannot break the internal persistence write chain.

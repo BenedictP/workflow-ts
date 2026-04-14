@@ -1,5 +1,5 @@
 import type { Workflow } from '@workflow-ts/core';
-import { createRuntime, WorkflowRuntime } from '@workflow-ts/core';
+import { createRuntime, type WorkflowRuntime } from '@workflow-ts/core';
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import {

@@ -90,8 +90,44 @@ const resolvePersistKey = <P>(resolver: PersistKeyResolver<P>, props: P): string
   return typeof resolver === 'function' ? resolver(props) : resolver;
 };
 
+const isBrowserLikeEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly window?: unknown;
+    readonly document?: unknown;
+  };
+  return runtimeGlobals.window !== undefined && runtimeGlobals.document !== undefined;
+};
+
+const isReactNativeEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly navigator?: {
+      readonly product?: unknown;
+    };
+  };
+  return runtimeGlobals.navigator?.product === 'ReactNative';
+};
+
+const isTestEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as {
+    readonly vi?: unknown;
+    readonly jest?: unknown;
+  };
+
+  if (runtimeGlobals.vi !== undefined || runtimeGlobals.jest !== undefined) {
+    return true;
+  }
+
+  const nodeEnv = typeof process === 'undefined' ? undefined : process.env['NODE_ENV'];
+  return nodeEnv === 'test';
+};
+
 const isServerLikeEnvironment = (): boolean => {
-  return typeof window === 'undefined';
+  return !isBrowserLikeEnvironment() && !isReactNativeEnvironment() && !isTestEnvironment();
+};
+
+// Internal test seam for environment classification.
+export const __testing = {
+  isServerLikeEnvironment,
 };
 
 const isDevelopmentEnvironment = (): boolean => {

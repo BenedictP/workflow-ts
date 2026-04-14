@@ -12,6 +12,7 @@ type PersistOperation =
   | 'getItem'
   | 'setItem'
   | 'removeItem'
+  | 'decodeEnvelope'
   | 'serialize'
   | 'deserialize'
   | 'migrate';
@@ -56,6 +57,10 @@ interface PersistRuntimeInternals<P, S, O, R> {
 interface RehydratedState<S> {
   readonly state: S;
   readonly data: string;
+}
+
+interface EnqueuePersistOptions {
+  readonly force?: boolean;
 }
 
 const PERSIST_LOG_PREFIX = '[workflow-ts/persist]';
@@ -210,7 +215,7 @@ const decodePersistedState = <P, S, O, R>(
   } catch (error) {
     reportError(error, {
       phase: 'rehydrate',
-      operation: 'deserialize',
+      operation: 'decodeEnvelope',
       key: config.key,
     });
     removePersistedValue();
@@ -277,6 +282,7 @@ const createPersistRuntimeInternals = <P, S, O, R>(
   const deserializeState = config.deserialize;
 
   let pendingSnapshot: string | undefined;
+  let latestSnapshot: string | undefined;
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let writeChain: Promise<void> = Promise.resolve();
   let persistDisposed = false;
@@ -291,9 +297,11 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     });
   };
 
-  const enqueuePersist = (snapshot: string): void => {
+  const enqueuePersist = (snapshot: string, options?: EnqueuePersistOptions): void => {
+    const force = options?.force ?? false;
+
     writeChain = writeChain.then(async () => {
-      if (persistDisposed) {
+      if (persistDisposed && !force) {
         return;
       }
 
@@ -316,6 +324,7 @@ const createPersistRuntimeInternals = <P, S, O, R>(
       return;
     }
 
+    latestSnapshot = snapshot;
     pendingSnapshot = snapshot;
 
     if (debounceMs === 0) {
@@ -368,11 +377,19 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     if (persistDisposed) {
       return;
     }
-    persistDisposed = true;
+
+    const snapshotToFlush = pendingSnapshot ?? latestSnapshot;
+    pendingSnapshot = undefined;
     if (debounceTimer !== undefined) {
       clearTimeout(debounceTimer);
       debounceTimer = undefined;
     }
+    persistDisposed = true;
+
+    if (snapshotToFlush !== undefined) {
+      enqueuePersist(snapshotToFlush, { force: true });
+    }
+
     originalDispose();
   };
 

@@ -487,6 +487,37 @@ describe('persistRuntime v3', () => {
     expect(setItem).toHaveBeenCalledWith('counter', envelope('{"count":2}'));
   });
 
+  it('flushes latest snapshot on dispose when debounce is pending', async () => {
+    vi.useFakeTimers();
+    const { storage, setItem } = createStorageSpy();
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      writeDebounceMs: 100,
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+    });
+
+    runtime.getRendering().increment();
+
+    vi.advanceTimersByTime(50);
+    expect(setItem).not.toHaveBeenCalled();
+
+    runtime.dispose();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledWith('counter', envelope('{"count":1}'));
+
+    vi.advanceTimersByTime(200);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(setItem).toHaveBeenCalledTimes(1);
+  });
+
   it('does not immediately persist internal hydration action', async () => {
     const { storage, setItem } = createStorageSpy(envelope('{"count":3}'));
 
@@ -556,6 +587,7 @@ describe('persistRuntime v3', () => {
 
   it('drops invalid envelope and continues with fresh state', async () => {
     const removeItem = vi.fn(async () => undefined);
+    const onError = vi.fn();
 
     const runtime = await createPersistedRuntimeAsync(counterWorkflow, undefined, {
       storage: {
@@ -567,10 +599,20 @@ describe('persistRuntime v3', () => {
       version: PERSIST_VERSION,
       serialize: counterSerialize,
       deserialize: counterDeserialize,
+      onError,
     });
 
     expect(runtime.getState()).toEqual({ count: 0 });
     expect(removeItem).toHaveBeenCalledWith('counter');
+    expect(
+      onError.mock.calls.some(
+        ([error, context]: [unknown, PersistErrorContext]) =>
+          error instanceof Error &&
+          context.phase === 'rehydrate' &&
+          context.operation === 'decodeEnvelope' &&
+          context.key === 'counter',
+      ),
+    ).toBe(true);
   });
 
   it('continues runtime when serialize throws', async () => {

@@ -6,7 +6,7 @@ Snapshots serialize workflow state so it can be persisted and restored.
 
 ```ts
 const workflow: Workflow<Props, State, Output, Rendering> = {
-  initialState: (props, snapshot) => snapshot ? JSON.parse(snapshot) : { count: 0 },
+  initialState: (props, snapshot) => (snapshot ? JSON.parse(snapshot) : { count: 0 }),
   snapshot: (state) => JSON.stringify(state),
   render: (props, state, ctx) => ({ count: state.count }),
 };
@@ -35,3 +35,6 @@ if (snapshotString !== undefined) {
 ```
 
 For React hooks, `useWorkflowWithState` exposes a `snapshot()` helper that delegates to the same runtime method.
+
+If you want automatic storage on every state transition, use the persisted runtime APIs in
+[Persistence](./persistence.md).

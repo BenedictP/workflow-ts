@@ -22,4 +22,5 @@ If you are new to the library, start with Overview, then When to Use, then the r
 - [Interceptors](./guides/interceptors.md)
 - [Workers](./guides/workers.md)
 - [Snapshots](./guides/snapshots.md)
+- [Persistence](./guides/persistence.md)
 - [Testing](./guides/testing.md)

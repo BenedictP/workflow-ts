@@ -48,6 +48,7 @@ At a high level, `Props` enter a workflow runtime, and the runtime stores explic
 ### 1. Define the workflow (`@workflow-ts/core`)
 
 <!-- README_SNIPPET:workflow:start -->
+
 ```typescript
 import { createWorker, type Worker, type Workflow } from '@workflow-ts/core';
 
@@ -74,9 +75,7 @@ export type Rendering =
   | { type: 'error'; message: string; retry: () => void; close: () => void };
 
 // Worker results feed back into state transitions.
-type LoadProfileResult =
-  | { ok: true; name: string }
-  | { ok: false; message: string };
+type LoadProfileResult = { ok: true; name: string } | { ok: false; message: string };
 
 // Tests can inject custom workers through this provider.
 export interface WorkersProvider {
@@ -166,6 +165,7 @@ export const createProfileWorkflow = (
 
 export const profileWorkflow = createProfileWorkflow();
 ```
+
 <!-- README_SNIPPET:workflow:end -->
 
 Deep dive: [Overview](./docs/guides/overview.md), [Workers](./docs/guides/workers.md)
@@ -175,6 +175,7 @@ Render convention: keep `render` primarily as `switch (state.type)`. Use pre-swi
 ### 2. Subscribe in React (`@workflow-ts/react`)
 
 <!-- README_SNIPPET:react:start -->
+
 ```tsx
 import { useWorkflow } from '@workflow-ts/react';
 import type { JSX } from 'react';
@@ -215,9 +216,13 @@ export function ProfileScreen({ userId }: { userId: string }): JSX.Element {
           <button onClick={rendering.close}>Close</button>
         </section>
       );
+    default:
+      // Exhaustiveness check - this should never happen
+      throw new Error(`Unknown rendering type: ${(rendering as { type: string }).type}`);
   }
 }
 ```
+
 <!-- README_SNIPPET:react:end -->
 
 Deep dive: [React Integration](./docs/guides/react.md), [Next.js SSR & Hydration](./docs/guides/nextjs-ssr-hydration.md)
@@ -225,6 +230,7 @@ Deep dive: [React Integration](./docs/guides/react.md), [Next.js SSR & Hydration
 ### 3. Test without UI
 
 <!-- README_SNIPPET:test:start -->
+
 ```typescript
 import { createRuntime } from '@workflow-ts/core';
 import { expect, it } from 'vitest';
@@ -249,6 +255,7 @@ it('transitions loading -> loaded', () => {
   runtime.dispose();
 });
 ```
+
 <!-- README_SNIPPET:test:end -->
 
 Deep dive: [Testing](./docs/guides/testing.md)
@@ -276,9 +283,7 @@ Actions are pure reducers that return next state and optional output:
 
 ```typescript
 ctx.actionSink.send((state) =>
-  state.type === 'error'
-    ? { state: { type: 'loading' } }
-    : { state },
+  state.type === 'error' ? { state: { type: 'loading' } } : { state },
 );
 ```
 
@@ -351,6 +356,25 @@ restore: (snapshot) => JSON.parse(snapshot),
 
 More: [Snapshots](./docs/guides/snapshots.md)
 
+### Persistence
+
+You can also wire automatic persistence on every state transition:
+
+```typescript
+import { createPersistedRuntime, localStorageStorage } from '@workflow-ts/core';
+
+const runtime = createPersistedRuntime(workflow, props, {
+  storage: localStorageStorage(),
+  key: 'profile:v1:u1',
+  version: 2,
+  rehydrate: 'lazy',
+  serialize: (state) => JSON.stringify(state),
+  deserialize: (raw, _props) => JSON.parse(raw),
+});
+```
+
+More: [Persistence](./docs/guides/persistence.md)
+
 ## Documentation Map
 
 Start here: [Documentation Index](./docs/index.md)
@@ -370,6 +394,7 @@ Start here: [Documentation Index](./docs/index.md)
 
 - [Testing](./docs/guides/testing.md)
 - [Snapshots](./docs/guides/snapshots.md)
+- [Persistence](./docs/guides/persistence.md)
 
 ## Examples
 

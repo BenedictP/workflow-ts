@@ -40,6 +40,7 @@ This keeps workflow logic inside workflows and keeps React focused on rendering.
 At runtime, unsupported values are validated and rejected only in development environments (React Native `__DEV__`, `NODE_ENV !== 'production'`, or bundler dev flags).
 
 Allowed values:
+
 - primitives (`string`, `number`, `boolean`, `bigint`, `symbol`, `null`, `undefined`)
 - functions
 - arrays
@@ -48,6 +49,7 @@ Allowed values:
 - `ArrayBuffer`, `DataView`, typed arrays
 
 Rejected values:
+
 - class instances
 - branded built-ins outside the allowlist (`URL`, `Error`, `RegExp`, etc.)
 - `Promise`, `WeakMap`, `WeakSet`
@@ -145,6 +147,61 @@ function SearchComponent() {
 - `props: P` - Current props
 - `updateProps: (props: P) => void` - Update props
 - `snapshot: () => string | undefined` - Get state snapshot
+
+### `usePersistedWorkflow(workflow, options)`
+
+Unified persisted hook that combines runtime controls and hydration state.
+
+```tsx
+import { memoryStorage } from '@workflow-ts/core';
+import { usePersistedWorkflow } from '@workflow-ts/react';
+
+const storage = memoryStorage();
+
+const workflowView = usePersistedWorkflow(workflow, {
+  props,
+  persist: {
+    storage,
+    key: ({ userId }) => `profile:v1:${userId}`,
+    version: 2,
+    rehydrate: 'lazy',
+    writeDebounceMs: 250,
+    serialize: (state) => JSON.stringify(state),
+    deserialize: (raw, _props) => JSON.parse(raw),
+  },
+});
+```
+
+**Returns:**
+
+- `rendering: R`
+- `state: S`
+- `props: P`
+- `updateProps: (props: P) => void`
+- `snapshot: () => string | undefined`
+- `hydration: { status: 'idle' | 'rehydrating' | 'hydrated' | 'error'; error?: unknown; rehydratedAt?: number }`
+
+**Options:**
+
+- `props: P` - Required workflow props
+- `persist.storage: SyncStorage` - Sync storage adapter (sync-only in React hooks)
+- `persist.key: string | ((props: P) => string)` - Required deterministic key resolver
+- `persist.version: number` - Required envelope/schema version
+- `persist.serialize: (state: S) => string` - Required state serializer
+- `persist.deserialize: (raw: string, props: P) => S` - Required state deserializer
+- `persist.rehydrate?: 'none' | 'lazy'` - Defaults to `'lazy'`
+- `persist.writeDebounceMs?: number` - Debounce writes in milliseconds
+- `persist.migrate?: (raw, fromVersion, toVersion) => string` - Optional version migration
+- `persist.onPersist?`, `persist.onRehydrate?`, `persist.onError?` - Optional persistence callbacks
+- Standard runtime options are also supported: `lifecycle`, `isActive`, `outputHandlers`, `resetOnWorkflowChange`, `onOutput`
+
+Behavior notes:
+
+- Changing the resolved persist key recreates the runtime and isolates state per key.
+- Storage reference changes alone do not recreate the runtime.
+- Keep adapter instances stable (module scope or `useMemo`) for predictable storage backend usage.
+- In server-like environments, hooks use in-memory storage fallback automatically.
+- Async storage is not supported in React hooks; use core runtime APIs directly for async storage scenarios.
 
 ## Next.js and SSR hydration
 

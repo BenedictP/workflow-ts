@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** Reworked persistence in `@workflow-ts/core` to a strict codec model with versioned envelopes (`{ v, data }`): persisted runtimes now require explicit `serialize(state)` and `deserialize(raw, props)` in config, with optional `migrate(raw, fromVersion, toVersion)`.
+- **Breaking:** Consolidated `@workflow-ts/react` persisted APIs into one hook, `usePersistedWorkflow(workflow, { props, persist, ...options })`, which returns runtime controls (`rendering/state/props/updateProps/snapshot`) plus hydration state (`idle`/`rehydrating`/`hydrated`/`error`).
+- Removed the stale generated API snapshot directory and consolidated docs source-of-truth to `docs/` plus root/package READMEs.
+
+### Fixed
+
+- `createPersistedRuntimeAsync(..., { rehydrate: 'lazy' })` now reports synchronous storage read errors via `onError` instead of rejecting runtime creation.
+- React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
+
+## [0.1.3] - 2026-04-13
+
+### Changed
+
 - Refined Dependabot policy with deterministic Monday schedules, explicit `main` targeting, tighter PR limits, and grouped npm/GitHub Actions updates (including major-version updates) to reduce noise while keeping dependencies current.
 - Updated Dependabot reviewers to replace the legacy `openclaw` account with `AICodeHelper`.
 - Updated Dependabot reviewers and `CODEOWNERS` to `BenedictP` as the canonical reviewer/owner.
@@ -26,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Clarified the docs onboarding path, child output routing, and typed output subscription requirements.
+
 ### Fixed
 
 - Prevented React output handler subscription churn when `outputHandlers` is passed as an inline object by keeping per-output subscriptions stable and dispatching to the latest handler via refs.
@@ -35,5 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
-[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BenedictP/workflow-ts/compare/v0.1.1...v0.1.2

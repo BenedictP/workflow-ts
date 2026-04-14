@@ -105,6 +105,51 @@ const runtime = createRuntime(workflow, props, (output) => {
 });
 ```
 
+### `createPersistedRuntime(workflow, props, config)`
+
+Create a runtime with automatic snapshot persistence on state transitions.
+
+```typescript
+import { createPersistedRuntime, localStorageStorage } from '@workflow-ts/core';
+
+const runtime = createPersistedRuntime(workflow, props, {
+  storage: localStorageStorage(),
+  key: 'profile:v1:u1',
+  version: 2,
+  rehydrate: 'lazy',
+  writeDebounceMs: 250,
+  serialize: (state) => JSON.stringify(state),
+  deserialize: (raw, _props) => JSON.parse(raw),
+});
+```
+
+### `createPersistedRuntimeAsync(workflow, props, config)`
+
+Async variant for async storage and blocking hydration:
+
+```typescript
+import { createPersistedRuntimeAsync } from '@workflow-ts/core';
+
+const runtime = await createPersistedRuntimeAsync(workflow, props, {
+  storage: customAsyncStorage,
+  key: 'profile:v1:u1',
+  version: 2,
+  rehydrate: 'blocking',
+  serialize: (state) => JSON.stringify(state),
+  deserialize: (raw, _props) => JSON.parse(raw),
+});
+```
+
+Persistence requirements and storage adapters:
+
+- Requires `version`.
+- Requires config `serialize(state)` + `deserialize(raw, props)` (no implicit fallback path).
+- Built-in adapters: `localStorageStorage()`, `sessionStorageStorage()`, `memoryStorage()`.
+- `key` is required and must be explicit.
+- Optional `migrate(raw, fromVersion, toVersion)` handles envelope version upgrades.
+
+See the full guide: [Persistence](../../docs/guides/persistence.md).
+
 **Parameters:**
 
 - `workflow` - Workflow definition

@@ -23,6 +23,7 @@ You can also pass a custom async storage implementation (`getItem/setItem/remove
 
 When using React persisted hooks, keep storage adapter instances stable (module scope or `useMemo`).
 React hooks use lazy/non-blocking rehydrate semantics for async storage.
+When using React persisted hooks, keep codec function references (`serialize`, `deserialize`, `migrate`) stable.
 
 ## `createPersistedRuntime` (sync return, lazy rehydrate)
 

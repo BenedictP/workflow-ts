@@ -415,6 +415,41 @@ describe('usePersistedWorkflow', () => {
     expect(keyResolver).toHaveBeenCalled();
   });
 
+  it('warns once when persist codec function identities change', async () => {
+    const { storage } = createMapStorage();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const createSerialize = (): ((state: CounterState) => string) => {
+      return (state: CounterState) => JSON.stringify(state);
+    };
+
+    const { rerender } = renderHook(
+      (serialize: (state: CounterState) => string) =>
+        usePersistedWorkflow(counterWorkflow, {
+          props: undefined,
+          persist: {
+            storage,
+            key: 'counter',
+            version: PERSIST_VERSION,
+            serialize,
+            deserialize: counterDeserialize,
+          },
+        }),
+      {
+        initialProps: createSerialize(),
+      },
+    );
+
+    rerender(createSerialize());
+    await waitForMicrotasks();
+    rerender(createSerialize());
+    await waitForMicrotasks();
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('[workflow-ts/react]');
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('codec function identities');
+  });
+
   it('ignores stale async hydration resolution from replaced runtime', async () => {
     let resolveU1: ((value: string | null) => void) | undefined;
     let resolveU2: ((value: string | null) => void) | undefined;
@@ -636,6 +671,25 @@ describe('usePersistedWorkflow', () => {
         }),
       );
     }).toThrow('Persist config "key" must be a non-empty string');
+  });
+
+  it('throws when key resolver returns non-string value', () => {
+    const { storage } = createMapStorage();
+
+    expect(() => {
+      renderHook(() =>
+        usePersistedWorkflow(counterWorkflow, {
+          props: undefined,
+          persist: {
+            storage,
+            key: (() => 123) as unknown as PersistKeyResolver<void>,
+            version: PERSIST_VERSION,
+            serialize: counterSerialize,
+            deserialize: counterDeserialize,
+          },
+        }),
+      );
+    }).toThrow('Persist config "key" must resolve to a string');
   });
 
   it('reports hydration error on rehydrate failures', async () => {

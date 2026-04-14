@@ -94,6 +94,20 @@ const isServerLikeEnvironment = (): boolean => {
   return typeof window === 'undefined';
 };
 
+const isDevelopmentEnvironment = (): boolean => {
+  const runtimeGlobals = globalThis as { readonly __DEV__?: unknown };
+  if (typeof runtimeGlobals.__DEV__ === 'boolean') {
+    return runtimeGlobals.__DEV__;
+  }
+
+  const nodeEnv = typeof process === 'undefined' ? undefined : process.env['NODE_ENV'];
+  if (typeof nodeEnv === 'string') {
+    return nodeEnv !== 'production';
+  }
+
+  return true;
+};
+
 const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -129,6 +143,12 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const persistenceStore = persistenceStoreRef.current;
   const runtimeTokenRef = useRef(0);
   const isCreatingRuntimeRef = useRef(false);
+  const warnedCodecIdentityChangeRef = useRef(false);
+  const previousCodecRef = useRef<{
+    readonly serialize: ReactPersistConfig<P, S, O, R>['serialize'];
+    readonly deserialize: ReactPersistConfig<P, S, O, R>['deserialize'];
+    readonly migrate: ReactPersistConfig<P, S, O, R>['migrate'];
+  } | null>(null);
 
   const persist = options.persist;
 
@@ -145,6 +165,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const effectiveStorage = getSafeStorage(persist.storage, serverFallbackStorageRef);
 
   const resolvedKey = resolvePersistKey(persist.key, options.props);
+  if (typeof resolvedKey !== 'string') {
+    throw new Error('Persist config "key" must resolve to a string');
+  }
   if (resolvedKey.trim().length === 0) {
     throw new Error('Persist config "key" must be a non-empty string');
   }
@@ -158,6 +181,37 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
     }),
     [resolvedKey, persist.version, persist.rehydrate, persist.writeDebounceMs],
   );
+
+  useEffect(() => {
+    const previousCodec = previousCodecRef.current;
+    previousCodecRef.current = {
+      serialize: persist.serialize,
+      deserialize: persist.deserialize,
+      migrate: persist.migrate,
+    };
+
+    if (previousCodec === null || warnedCodecIdentityChangeRef.current) {
+      return;
+    }
+
+    if (!isDevelopmentEnvironment()) {
+      return;
+    }
+
+    const codecChanged =
+      previousCodec.serialize !== persist.serialize ||
+      previousCodec.deserialize !== persist.deserialize ||
+      previousCodec.migrate !== persist.migrate;
+
+    if (!codecChanged) {
+      return;
+    }
+
+    warnedCodecIdentityChangeRef.current = true;
+    console.warn(
+      '[workflow-ts/react] usePersistedWorkflow detected changed persist codec function identities (serialize/deserialize/migrate). Runtime is not recreated for these changes; keep codec functions stable with useCallback or module scope.',
+    );
+  }, [persist.deserialize, persist.migrate, persist.serialize]);
 
   const createRuntimeWithPersistence = useCallback(
     (

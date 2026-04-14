@@ -200,6 +200,7 @@ Behavior notes:
 - Changing the resolved persist key recreates the runtime and isolates state per key.
 - Storage reference changes alone do not recreate the runtime.
 - Keep adapter instances stable (module scope or `useMemo`) for predictable storage backend usage.
+- Keep `persist.serialize`, `persist.deserialize`, and `persist.migrate` function references stable (for example via `useCallback` or module scope). Changing codec identities does not recreate the runtime.
 - In server-like environments, hooks use in-memory storage fallback automatically.
 - Async storage in React hooks is lazy/non-blocking: runtime is created immediately, then persisted state is applied when storage resolves.
 

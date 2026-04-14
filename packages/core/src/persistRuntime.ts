@@ -136,7 +136,16 @@ const createErrorReporter = (
       );
     }
 
-    onError?.(error, context);
+    try {
+      onError?.(error, context);
+    } catch (callbackError) {
+      const callbackErrorMessage =
+        callbackError instanceof Error ? callbackError.message : String(callbackError);
+      console.error(
+        `${PERSIST_LOG_PREFIX} onError callback threw for key "${context.key}"`,
+        callbackErrorMessage,
+      );
+    }
   };
 };
 

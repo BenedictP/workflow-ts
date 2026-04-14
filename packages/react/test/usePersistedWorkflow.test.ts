@@ -90,10 +90,10 @@ const outputWorkflow: Workflow<void, CounterState, OutputEvent, OutputRendering>
 };
 
 const waitForMicrotasks = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
   });
 };
 
@@ -326,9 +326,10 @@ describe('usePersistedWorkflow', () => {
     vi.advanceTimersByTime(99);
     expect(setItem).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(1);
-    await Promise.resolve();
-    await Promise.resolve();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await waitForMicrotasks();
 
     expect(setItem).toHaveBeenCalledTimes(1);
     expect(setItem).toHaveBeenCalledWith('counter', envelope('{"count":2}'));
@@ -551,7 +552,7 @@ describe('usePersistedWorkflow', () => {
     expect(result.current.rendering.value).toBe(1);
   });
 
-  it('supports onOutput and outputHandlers with persistence enabled', () => {
+  it('supports onOutput and outputHandlers with persistence enabled', async () => {
     const onOutput = vi.fn();
     const onSaved = vi.fn();
     const { storage } = createMapStorage();
@@ -576,6 +577,7 @@ describe('usePersistedWorkflow', () => {
     act(() => {
       result.current.rendering.save();
     });
+    await waitForMicrotasks();
 
     expect(onOutput).toHaveBeenCalledWith({ type: 'saved', value: 1 });
     expect(onSaved).toHaveBeenCalledWith({ type: 'saved', value: 1 });
@@ -616,6 +618,46 @@ describe('usePersistedWorkflow', () => {
 
     rerender(true);
     expect(result.current.rendering.count).toBe(1);
+  });
+
+  it('does not recreate runtime when rehydrate toggles between undefined and lazy', async () => {
+    const { storage } = createMapStorage();
+
+    const { result, rerender } = renderHook(
+      (rehydrate: 'lazy' | undefined) =>
+        usePersistedWorkflow(counterWorkflow, {
+          props: undefined,
+          persist: {
+            storage,
+            key: 'counter',
+            version: PERSIST_VERSION,
+            rehydrate,
+            serialize: counterSerialize,
+            deserialize: counterDeserialize,
+          },
+        }),
+      {
+        initialProps: undefined,
+      },
+    );
+
+    act(() => {
+      result.current.rendering.increment();
+    });
+    await waitForMicrotasks();
+    expect(result.current.rendering.count).toBe(1);
+
+    rerender('lazy');
+    expect(result.current.rendering.count).toBe(1);
+
+    act(() => {
+      result.current.rendering.increment();
+    });
+    await waitForMicrotasks();
+    expect(result.current.rendering.count).toBe(2);
+
+    rerender(undefined);
+    expect(result.current.rendering.count).toBe(2);
   });
 
   it('continues rendering when storage throws', async () => {

@@ -171,15 +171,16 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   if (resolvedKey.trim().length === 0) {
     throw new Error('Persist config "key" must be a non-empty string');
   }
+  const resolvedRehydrateMode = persist.rehydrate ?? 'lazy';
 
   const runtimeIdentity = useMemo(
     () => ({
       key: resolvedKey,
       version: persist.version,
-      rehydrate: persist.rehydrate ?? 'lazy',
+      rehydrate: resolvedRehydrateMode,
       writeDebounceMs: persist.writeDebounceMs,
     }),
-    [resolvedKey, persist.version, persist.rehydrate, persist.writeDebounceMs],
+    [resolvedKey, persist.version, resolvedRehydrateMode, persist.writeDebounceMs],
   );
 
   useEffect(() => {
@@ -223,8 +224,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
       runtimeTokenRef.current = runtimeToken;
       const isCurrentRuntimeToken = (): boolean => runtimeTokenRef.current === runtimeToken;
 
-      const rehydrateMode = persist.rehydrate ?? 'lazy';
-      if (rehydrateMode === 'none') {
+      if (resolvedRehydrateMode === 'none') {
         persistenceStore.replaceSnapshot({ phase: 'idle', isHydrated: false });
       } else {
         persistenceStore.replaceSnapshot({ phase: 'rehydrating', isHydrated: false });
@@ -257,7 +257,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
         getItem: (key: string): string | null | Promise<string | null> => {
           const value = effectiveStorage.getItem(key);
 
-          if (rehydrateMode === 'lazy') {
+          if (resolvedRehydrateMode === 'lazy') {
             if (isPromiseLike<string | null>(value)) {
               void value
                 .then((resolvedValue) => {
@@ -290,7 +290,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           storage: trackedStorage,
           key: resolvedKey,
           version: persist.version,
-          rehydrate: rehydrateMode,
+          rehydrate: resolvedRehydrateMode,
           writeDebounceMs: persist.writeDebounceMs,
           serialize: persist.serialize,
           deserialize: persist.deserialize,
@@ -348,10 +348,10 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
       persistenceStore,
       persist.deserialize,
       persist.migrate,
-      persist.rehydrate,
       persist.serialize,
       persist.version,
       persist.writeDebounceMs,
+      resolvedRehydrateMode,
       resolvedKey,
     ],
   );

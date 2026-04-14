@@ -660,6 +660,36 @@ describe('persistRuntime v3', () => {
     ).toBe(true);
   });
 
+  it('continues persistence chain when onError callback throws', async () => {
+    const setItem = vi.fn(async () => {
+      throw new Error('write failed');
+    });
+    const onError = vi.fn(() => {
+      throw new Error('onError failed');
+    });
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage: {
+        getItem: vi.fn(() => null),
+        setItem,
+        removeItem: vi.fn(() => undefined),
+      },
+      key: 'counter',
+      version: PERSIST_VERSION,
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onError,
+    });
+
+    runtime.getRendering().increment();
+    runtime.getRendering().increment();
+    await waitForMicrotasks();
+
+    expect(runtime.getState()).toEqual({ count: 2 });
+    expect(setItem).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+  });
+
   it('drops invalid envelope and continues with fresh state', async () => {
     const removeItem = vi.fn(async () => undefined);
     const onError = vi.fn();

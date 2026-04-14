@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
 - Persist error reporting now classifies thrown `onPersist` callback failures as `operation: 'onPersist'` instead of misreporting them as storage `setItem` failures.
 - Persist error reporting now classifies thrown `onRehydrate` callback failures as `operation: 'onRehydrate'` and keeps runtime hydration/state transitions running.
+- Persist error handling now guards user `onError` callbacks so thrown callback exceptions cannot break the internal persistence write chain.
 
 ## [0.1.3] - 2026-04-13
 

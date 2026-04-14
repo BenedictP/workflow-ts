@@ -585,6 +585,81 @@ describe('persistRuntime v3', () => {
     ).toBe(true);
   });
 
+  it('reports onRehydrate callback errors with operation:onRehydrate and keeps hydrated state', () => {
+    const onError = vi.fn();
+    const onRehydrate = vi.fn(() => {
+      throw new Error('onRehydrate failed');
+    });
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage: {
+        getItem: vi.fn(() => envelope('{"count":2}')),
+        setItem: vi.fn(() => undefined),
+        removeItem: vi.fn(() => undefined),
+      },
+      key: 'counter',
+      version: PERSIST_VERSION,
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onRehydrate,
+      onError,
+    });
+
+    expect(runtime.getState()).toEqual({ count: 2 });
+    expect(onRehydrate).toHaveBeenCalledWith('{"count":2}');
+    expect(
+      onError.mock.calls.some(
+        ([error, context]: [unknown, PersistErrorContext]) =>
+          error instanceof Error &&
+          error.message === 'onRehydrate failed' &&
+          context.phase === 'rehydrate' &&
+          context.operation === 'onRehydrate' &&
+          context.key === 'counter',
+      ),
+    ).toBe(true);
+
+    expect(() => runtime.getRendering().increment()).not.toThrow();
+    expect(runtime.getState()).toEqual({ count: 3 });
+  });
+
+  it('reports onPersist callback errors with operation:onPersist', async () => {
+    const onError = vi.fn();
+    const onPersist = vi.fn(() => {
+      throw new Error('onPersist failed');
+    });
+    const setItem = vi.fn(async () => undefined);
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage: {
+        getItem: vi.fn(() => null),
+        setItem,
+        removeItem: vi.fn(() => undefined),
+      },
+      key: 'counter',
+      version: PERSIST_VERSION,
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onPersist,
+      onError,
+    });
+
+    runtime.getRendering().increment();
+    await waitForMicrotasks();
+
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(onPersist).toHaveBeenCalledWith('{"count":1}');
+    expect(
+      onError.mock.calls.some(
+        ([error, context]: [unknown, PersistErrorContext]) =>
+          error instanceof Error &&
+          error.message === 'onPersist failed' &&
+          context.phase === 'persist' &&
+          context.operation === 'onPersist' &&
+          context.key === 'counter',
+      ),
+    ).toBe(true);
+  });
+
   it('drops invalid envelope and continues with fresh state', async () => {
     const removeItem = vi.fn(async () => undefined);
     const onError = vi.fn();

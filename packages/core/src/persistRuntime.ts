@@ -14,6 +14,8 @@ type PersistOperation =
   | 'removeItem'
   | 'decodeEnvelope'
   | 'serialize'
+  | 'onPersist'
+  | 'onRehydrate'
   | 'deserialize'
   | 'migrate';
 
@@ -269,6 +271,22 @@ const decodePersistedState = <P, S, O, R>(
   }
 };
 
+const invokeOnRehydrate = <P, S, O, R>(
+  data: string,
+  config: PersistConfig<P, S, O, R>,
+  reportError: (error: unknown, context: PersistErrorContext) => void,
+): void => {
+  try {
+    config.onRehydrate?.(data);
+  } catch (error) {
+    reportError(error, {
+      phase: 'rehydrate',
+      operation: 'onRehydrate',
+      key: config.key,
+    });
+  }
+};
+
 const createPersistRuntimeInternals = <P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
@@ -308,11 +326,21 @@ const createPersistRuntimeInternals = <P, S, O, R>(
       try {
         const envelope = encodePersistEnvelope(config.version, snapshot);
         await asyncStorage.setItem(config.key, envelope);
-        config.onPersist?.(snapshot);
       } catch (error) {
         reportError(error, {
           phase: 'persist',
           operation: 'setItem',
+          key: config.key,
+        });
+        return;
+      }
+
+      try {
+        config.onPersist?.(snapshot);
+      } catch (error) {
+        reportError(error, {
+          phase: 'persist',
+          operation: 'onPersist',
           key: config.key,
         });
       }
@@ -414,7 +442,7 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     }
 
     runtime.send(createHydrateAction<S, O>(result.state));
-    config.onRehydrate?.(result.data);
+    invokeOnRehydrate(result.data, config, reportError);
   };
 
   return {
@@ -519,7 +547,7 @@ const createBlockingRuntime = async <P, S, O, R>(
     reportError,
     result.state,
   );
-  config.onRehydrate?.(result.data);
+  invokeOnRehydrate(result.data, config, reportError);
   return internals.runtime;
 };
 

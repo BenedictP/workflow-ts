@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `createPersistedRuntimeAsync(..., { rehydrate: 'lazy' })` no longer throws when the runtime is disposed before async storage read completes; `applyHydrationValue` now checks `persistDisposed` before accessing the runtime.
 - `createPersistedRuntimeAsync(..., { rehydrate: 'lazy' })` now reports synchronous storage read errors via `onError` instead of rejecting runtime creation.
 - React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
 

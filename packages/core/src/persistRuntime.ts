@@ -370,6 +370,10 @@ const createPersistRuntimeInternals = <P, S, O, R>(
   };
 
   const applyHydrationValue = (storedValue: string): void => {
+    if (persistDisposed) {
+      return;
+    }
+
     const result = decodePersistedState(
       storedValue,
       runtime.getProps(),

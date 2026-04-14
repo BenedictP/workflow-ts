@@ -1,5 +1,5 @@
-import type { PersistErrorContext, PersistStorage, Workflow } from '@workflow-ts/core';
-import { createPersistedRuntime, memoryStorage, WorkflowRuntime } from '@workflow-ts/core';
+import type { PersistErrorContext, PersistStorage, Workflow, WorkflowRuntime } from '@workflow-ts/core';
+import { createPersistedRuntime, memoryStorage } from '@workflow-ts/core';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import {
@@ -127,6 +127,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
     persistenceStoreRef.current = createPersistenceStore();
   }
   const persistenceStore = persistenceStoreRef.current;
+  const runtimeTokenRef = useRef(0);
   const isCreatingRuntimeRef = useRef(false);
 
   const persist = options.persist;
@@ -164,6 +165,10 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
       runtimeProps: P,
       runtimeOnOutput: (output: O) => void,
     ): WorkflowRuntime<P, S, O, R> => {
+      const runtimeToken = runtimeTokenRef.current + 1;
+      runtimeTokenRef.current = runtimeToken;
+      const isCurrentRuntimeToken = (): boolean => runtimeTokenRef.current === runtimeToken;
+
       const rehydrateMode = persist.rehydrate ?? 'lazy';
       if (rehydrateMode === 'none') {
         persistenceStore.replaceSnapshot({ phase: 'idle', isHydrated: false });
@@ -178,6 +183,10 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
         persistenceStore.setSnapshot(next);
       };
       const markRehydratedWithoutSnapshot = (): void => {
+        if (!isCurrentRuntimeToken()) {
+          return;
+        }
+
         const current = persistenceStore.getSnapshot();
         if (current.phase !== 'rehydrating') {
           return;
@@ -198,6 +207,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
             if (isPromiseLike<string | null>(value)) {
               void value
                 .then((resolvedValue) => {
+                  if (!isCurrentRuntimeToken()) {
+                    return;
+                  }
                   if (resolvedValue === null) {
                     markRehydratedWithoutSnapshot();
                   }
@@ -231,6 +243,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           migrate: persist.migrate,
           onOutput: runtimeOnOutput,
           onPersist: (snapshot: string) => {
+            if (!isCurrentRuntimeToken()) {
+              return;
+            }
             const current = persistenceStore.getSnapshot();
             publishPersistenceState({
               ...current,
@@ -239,6 +254,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
             onPersistRef.current?.(snapshot);
           },
           onRehydrate: (snapshot: string) => {
+            if (!isCurrentRuntimeToken()) {
+              return;
+            }
             const current = persistenceStore.getSnapshot();
             publishPersistenceState({
               ...current,
@@ -250,6 +268,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
             onRehydrateRef.current?.(snapshot);
           },
           onError: (error: unknown, context: PersistErrorContext) => {
+            if (!isCurrentRuntimeToken()) {
+              return;
+            }
             if (context.phase === 'rehydrate') {
               const current = persistenceStore.getSnapshot();
               publishPersistenceState({

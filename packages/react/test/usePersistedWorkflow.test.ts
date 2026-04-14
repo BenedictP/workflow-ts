@@ -415,6 +415,68 @@ describe('usePersistedWorkflow', () => {
     expect(keyResolver).toHaveBeenCalled();
   });
 
+  it('ignores stale async hydration resolution from replaced runtime', async () => {
+    let resolveU1: ((value: string | null) => void) | undefined;
+    let resolveU2: ((value: string | null) => void) | undefined;
+
+    const storage: PersistStorage = {
+      getItem: (key: string) => {
+        if (key === 'counter:u1') {
+          return new Promise<string | null>((resolve) => {
+            resolveU1 = resolve;
+          });
+        }
+
+        if (key === 'counter:u2') {
+          return new Promise<string | null>((resolve) => {
+            resolveU2 = resolve;
+          });
+        }
+
+        return Promise.resolve(null);
+      },
+      setItem: async () => undefined,
+      removeItem: async () => undefined,
+    };
+
+    const { result, rerender } = renderHook(
+      (props: PropsInput) =>
+        usePersistedWorkflow(propsWorkflow, {
+          props,
+          persist: {
+            storage,
+            key: (p) => `counter:${p.userId}`,
+            version: PERSIST_VERSION,
+            serialize: propsSerialize,
+            deserialize: propsDeserialize,
+            rehydrate: 'lazy',
+          },
+        }),
+      {
+        initialProps: { userId: 'u1', initial: 0 },
+      },
+    );
+
+    expect(result.current.persistence.phase).toBe('rehydrating');
+
+    rerender({ userId: 'u2', initial: 0 });
+    expect(result.current.persistence.phase).toBe('rehydrating');
+
+    resolveU1?.(null);
+    await waitForMicrotasks();
+
+    // Stale u1 hydration completion must not affect active u2 runtime state.
+    expect(result.current.persistence.phase).toBe('rehydrating');
+    expect(result.current.persistence.isHydrated).toBe(false);
+
+    resolveU2?.(envelope('{"value":7}'));
+    await waitForMicrotasks();
+
+    expect(result.current.rendering.value).toBe(7);
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(true);
+  });
+
   it('isolates state by key when switching entities', async () => {
     const { storage } = createMapStorage();
 

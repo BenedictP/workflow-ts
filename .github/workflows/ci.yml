@@ -16,21 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build packages (for workspace references)
         run: pnpm build
-      
+
       - name: Type check
         run: pnpm typecheck
 
@@ -39,21 +39,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build packages (for workspace references)
         run: pnpm build
-      
+
       - name: Lint
         run: pnpm lint
 
@@ -62,21 +62,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build packages (for workspace references)
         run: pnpm build
-      
+
       - name: Run tests
         run: pnpm test
 
@@ -86,21 +86,21 @@ jobs:
     needs: [typecheck, lint, test]
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Build
         run: pnpm build
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:

@@ -79,11 +79,11 @@ interface OutputRendering {
 const outputWorkflow: Workflow<void, CounterState, OutputEvent, OutputRendering> = {
   initialState: () => ({ count: 0 }),
   snapshot: (state) => JSON.stringify(state),
-  render: (_props, state, ctx) => ({
+  render: (_props, _state, ctx) => ({
     save: () => {
-      ctx.actionSink.send(() => ({
-        state: { count: state.count + 1 },
-        output: { type: 'saved', value: state.count + 1 },
+      ctx.actionSink.send((s) => ({
+        state: { count: s.count + 1 },
+        output: { type: 'saved', value: s.count + 1 },
       }));
     },
   }),

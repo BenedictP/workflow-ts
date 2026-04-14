@@ -377,6 +377,13 @@ const createPersistRuntimeInternals = <P, S, O, R>(
   };
 
   const applyHydrationValue = (storedValue: string): void => {
+    // Lazy hydration may resolve after runtime disposal (e.g. async storage read).
+    // In that case, skip hydration silently instead of reporting a misleading
+    // storage-read error from disposed runtime access.
+    if (persistDisposed || runtime.isDisposed()) {
+      return;
+    }
+
     const result = decodePersistedState(
       storedValue,
       runtime.getProps(),

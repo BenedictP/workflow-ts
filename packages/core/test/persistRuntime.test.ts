@@ -225,6 +225,78 @@ describe('persistRuntime v3', () => {
     ).toBe(true);
   });
 
+  it('async API lazy mode ignores late hydration after runtime is disposed', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+    const onError = vi.fn();
+    const onRehydrate = vi.fn();
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = await createPersistedRuntimeAsync(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onError,
+      onRehydrate,
+    });
+
+    runtime.dispose();
+    resolveGet?.(envelope('{"count":10}'));
+    await waitForMicrotasks();
+
+    expect(runtime.isDisposed()).toBe(true);
+    expect(onRehydrate).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('sync API lazy mode ignores late async hydration after runtime is disposed', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+    const onError = vi.fn();
+    const onRehydrate = vi.fn();
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onError,
+      onRehydrate,
+    });
+
+    runtime.dispose();
+    resolveGet?.(envelope('{"count":12}'));
+    await waitForMicrotasks();
+
+    expect(runtime.isDisposed()).toBe(true);
+    expect(onRehydrate).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('throws for invalid key/version config', async () => {
     const storage = memoryStorage();
 

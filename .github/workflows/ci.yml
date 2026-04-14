@@ -16,14 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: '9'
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -39,14 +41,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: '9'
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,14 +66,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: '9'
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -86,14 +92,16 @@ jobs:
     needs: [typecheck, lint, test]
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: '9'
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -122,13 +130,15 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
-
+        with:
+          version: '9'
+      
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
+      
       - name: Build
         run: pnpm build
-
+      
       - name: Verify package versions stay aligned for release tags
         run: |
           CORE_VERSION="$(node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync('packages/core/package.json', 'utf8')).version)")"

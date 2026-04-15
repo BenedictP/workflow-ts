@@ -86,6 +86,52 @@ const rendering = useWorkflow(workflow, props, undefined, {
 });
 ```
 
+### `usePersistedWorkflow`
+
+Use this hook when state should be automatically saved/restored via `@workflow-ts/core`
+persistence.
+
+```tsx
+import { memoryStorage } from '@workflow-ts/core';
+import { usePersistedWorkflow } from '@workflow-ts/react';
+
+const storage = memoryStorage();
+
+const workflowView = usePersistedWorkflow(workflow, {
+  props,
+  persist: {
+    storage,
+    key: ({ userId }) => `profile:v1:${userId}`,
+    version: 2,
+    rehydrate: 'lazy',
+    serialize: (state) => JSON.stringify(state),
+    deserialize: (raw, _props) => JSON.parse(raw),
+  },
+});
+```
+
+Key behaviors:
+
+- `persist.key` is required and can be a string or props-based resolver.
+- `persist.version` is required and controls migration boundaries.
+- `persist.serialize` and `persist.deserialize` are required.
+- Key changes recreate runtime so each key gets isolated persisted state.
+- Storage reference changes alone do not recreate runtime.
+- Keep adapter instances stable (module scope or `useMemo`) for predictable storage backend usage.
+- Keep `persist.serialize`, `persist.deserialize`, and `persist.migrate` references stable (`useCallback` or module scope). Changing codec identities does not recreate runtime.
+- React persisted hooks accept sync and async storage adapters.
+- Async storage hydration is lazy/non-blocking in hooks (runtime first, persisted state later).
+- Server-like environments automatically use in-memory storage fallback.
+
+Returned shape:
+
+- `rendering`
+- `state`
+- `props`
+- `updateProps`
+- `snapshot`
+- `persistence: { phase, error?, isHydrated, lastRehydratedAt?, lastPersistedAt? }`
+
 ## Next.js and SSR hydration
 
 `@workflow-ts/react` works with Next.js SSR, but hydration safety depends on deterministic workflow output.

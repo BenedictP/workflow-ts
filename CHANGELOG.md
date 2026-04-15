@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** Reworked persistence in `@workflow-ts/core` to a strict codec model with versioned envelopes (`{ v, data }`): persisted runtimes now require explicit `serialize(state)` and `deserialize(raw, props)` in config, with optional `migrate(raw, fromVersion, toVersion)`.
+- **Breaking:** Redesigned `@workflow-ts/react` persisted hook output to expose `persistence` phase state (`idle`/`rehydrating`/`ready`/`error`) with metadata (`isHydrated`, `lastRehydratedAt`, `lastPersistedAt`) instead of the previous `hydration` shape.
+- React persisted hooks now accept `PersistStorage` (sync or async) with lazy non-blocking rehydrate semantics.
+- `createPersistedRuntime()` now accepts `PersistStorage` directly and supports lazy rehydrate from async `getItem` without requiring async runtime creation.
+
+### Fixed
+
+- Persistence error context now reports invalid envelope payloads as `operation: 'decodeEnvelope'` (instead of `deserialize`) so consumers can distinguish envelope corruption from user codec failures.
+- `createPersistedRuntimeAsync(..., { rehydrate: 'lazy' })` now reports synchronous storage read errors via `onError` instead of rejecting runtime creation.
+- Persisted runtimes now flush the latest pending snapshot on `dispose()` (including debounced writes) to avoid dropping the final transition state.
+- `usePersistedWorkflow` now warns once in development when `persist.serialize`/`persist.deserialize`/`persist.migrate` function identities change after mount.
+- `usePersistedWorkflow` now throws a clear configuration error when `persist.key` resolves to a non-string value at runtime.
+- React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
+- React persisted-hook server fallback detection now aligns with core environment rules so React Native/test-like environments are not misclassified as server-only.
+- Persist error reporting now classifies thrown `onPersist` callback failures as `operation: 'onPersist'` instead of misreporting them as storage `setItem` failures.
+- Persist error reporting now classifies thrown `onRehydrate` callback failures as `operation: 'onRehydrate'` and keeps runtime hydration/state transitions running.
+- Persist error handling now guards user `onError` callbacks so thrown callback exceptions cannot break the internal persistence write chain.
+
+## [0.1.3] - 2026-04-13
+
+### Changed
+
 - Refined Dependabot policy with deterministic Monday schedules, explicit `main` targeting, tighter PR limits, and grouped npm/GitHub Actions updates (including major-version updates) to reduce noise while keeping dependencies current.
 - Updated Dependabot reviewers to replace the legacy `openclaw` account with `AICodeHelper`.
 - Updated Dependabot reviewers and `CODEOWNERS` to `BenedictP` as the canonical reviewer/owner.
@@ -26,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Clarified the docs onboarding path, child output routing, and typed output subscription requirements.
+
 ### Fixed
 
 - Prevented React output handler subscription churn when `outputHandlers` is passed as an inline object by keeping per-output subscriptions stable and dispatching to the latest handler via refs.
@@ -35,5 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
-[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BenedictP/workflow-ts/compare/v0.1.1...v0.1.2

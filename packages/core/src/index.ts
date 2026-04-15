@@ -49,6 +49,27 @@ export { createWorker, debounceWorker, fetchWorker, fromPromise, WorkerManager }
 // Snapshot utilities
 export { jsonSnapshot, SnapshotParseError, type Snapshotable, versionedSnapshot } from './snapshot';
 
+// Persistence
+export {
+  createPersistedRuntime,
+  createPersistedRuntimeAsync,
+  type PersistConfig,
+  type PersistDeserializer,
+  type PersistEnvelope,
+  type PersistErrorContext,
+  type PersistMigrate,
+  type PersistRehydrateMode,
+  type PersistSerializer,
+} from './persistRuntime';
+export {
+  localStorageStorage,
+  memoryStorage,
+  sessionStorageStorage,
+  type PersistStorage,
+  type SyncStorage,
+  type AsyncStorage,
+} from './persistStorage';
+
 // Interceptors
 export {
   createInterceptor,

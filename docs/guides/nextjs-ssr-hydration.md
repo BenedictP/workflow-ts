@@ -15,7 +15,7 @@ These properties help, but hydration safety still depends on how your workflow i
 
 ## Required rules for SSR-safe workflows
 
-1. Use `useWorkflow` and `useWorkflowWithState` only in Client Components (`'use client'`).
+1. Use `useWorkflow`, `useWorkflowWithState`, and `usePersistedWorkflow` only in Client Components (`'use client'`).
 2. Keep initial workflow output deterministic for the same props on server and client.
 3. Do not branch render output on browser-only checks (for example `typeof window !== 'undefined'`) in the first render path.
 4. Do not use non-deterministic values (`Date.now()`, `Math.random()`) in `initialState` or first render output.
@@ -64,6 +64,7 @@ Practical implications:
 
 - SSR is safer by default because workers do not start on the server path.
 - Hydration still depends on your initial render being deterministic.
+- Persisted React hooks fall back to in-memory storage on server-like environments.
 
 Recommendations:
 
@@ -84,12 +85,12 @@ If you see hydration warnings:
 
 ## Do and do not
 
-| Do | Do not |
-| --- | --- |
-| Keep initial render deterministic from props | Use random/time-dependent values in first render |
-| Use Client Components for workflow hooks | Call workflow hooks from Server Components |
+| Do                                              | Do not                                                   |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| Keep initial render deterministic from props    | Use random/time-dependent values in first render         |
+| Use Client Components for workflow hooks        | Call workflow hooks from Server Components               |
 | Feed server-fetched data as deterministic props | Start first-render fetch workers by default on SSR paths |
-| Treat hydration warnings as correctness bugs | Ignore hydration warnings as harmless |
+| Treat hydration warnings as correctness bugs    | Ignore hydration warnings as harmless                    |
 
 ## Related guides
 

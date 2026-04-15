@@ -207,7 +207,7 @@ const decodePersistEnvelope = (raw: string): PersistEnvelope => {
   }
 
   return {
-    v: candidate.v,
+    v: candidate.v as number,
     data: candidate.data,
   };
 };

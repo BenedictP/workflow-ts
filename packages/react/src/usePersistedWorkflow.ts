@@ -53,7 +53,7 @@ const createPersistenceStore = (): PersistenceStore => {
   };
 };
 
-export interface ReactPersistConfig<P, S, O, R> {
+export interface ReactPersistConfig<P, S, _O, _R> {
   readonly storage: PersistStorage;
   readonly key: PersistKeyResolver<P>;
   readonly version: number;

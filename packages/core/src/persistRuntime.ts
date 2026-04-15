@@ -72,17 +72,17 @@ const toAsyncStorage = (storage: PersistStorage): AsyncStorage => {
   return {
     getItem: (key: string): Promise<string | null> => {
       return Promise.resolve().then(() => {
-        return storage.getItem(key) as string | null | Promise<string | null>;
+        return storage.getItem(key) as string | null;
       });
     },
     setItem: (key: string, value: string): Promise<void> => {
       return Promise.resolve().then(() => {
-        return storage.setItem(key, value) as void | Promise<void>;
+        return storage.setItem(key, value);
       });
     },
     removeItem: (key: string): Promise<void> => {
       return Promise.resolve().then(() => {
-        return storage.removeItem(key) as void | Promise<void>;
+        return storage.removeItem(key);
       });
     },
   };

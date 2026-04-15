@@ -289,7 +289,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           lastRehydratedAt: Date.now(),
         });
       };
-      const trackedStorage: PersistStorage = {
+      const trackedStorage = {
         getItem: (key: string): string | null | Promise<string | null> => {
           const value = effectiveStorage.getItem(key);
 
@@ -318,7 +318,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
         removeItem: (key: string): void | Promise<void> => {
           return effectiveStorage.removeItem(key);
         },
-      };
+      } as unknown as PersistStorage;
 
       isCreatingRuntimeRef.current = true;
       try {

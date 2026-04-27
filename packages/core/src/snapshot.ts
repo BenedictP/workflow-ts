@@ -21,7 +21,12 @@ export class SnapshotParseError extends Error {
         : rawSnapshot;
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     const errorConstructor = Error as typeof Error & {
-      captureStackTrace?: (target: object, constructorOpt?: () => void) => void;
+      captureStackTrace?: (
+        target: object,
+        // Error.captureStackTrace accepts any constructor function to trim from.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        constructorOpt?: abstract new (...args: any[]) => unknown,
+      ) => void;
     };
     if (typeof errorConstructor.captureStackTrace === 'function') {
       errorConstructor.captureStackTrace(this, SnapshotParseError);

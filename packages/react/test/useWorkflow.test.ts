@@ -67,7 +67,12 @@ interface PropsWorkflowRendering {
   readonly doubled: number;
 }
 
-const propsWorkflow: Workflow<{ initial: number }, PropsWorkflowState, never, PropsWorkflowRendering> = {
+const propsWorkflow: Workflow<
+  { initial: number },
+  PropsWorkflowState,
+  never,
+  PropsWorkflowRendering
+> = {
   initialState: (props) => ({ value: props.initial }),
 
   render: (props): PropsWorkflowRendering => ({
@@ -268,7 +273,7 @@ describe('useWorkflow', () => {
     expect(result.current.count).toBe(0);
     expect(typeof result.current.onIncrement).toBe('function');
     expect(typeof result.current.onDecrement).toBe('function');
-    
+
     unmount();
   });
 
@@ -287,15 +292,13 @@ describe('useWorkflow', () => {
     });
 
     expect(result.current.count).toBe(3);
-    
+
     unmount();
   });
 
   it('should call onOutput callback', () => {
     const onOutput = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useWorkflow(counterWorkflow, undefined, onOutput),
-    );
+    const { result, unmount } = renderHook(() => useWorkflow(counterWorkflow, undefined, onOutput));
 
     act(() => {
       result.current.onIncrement();
@@ -304,7 +307,7 @@ describe('useWorkflow', () => {
 
     expect(onOutput).toHaveBeenCalledTimes(1);
     expect(onOutput).toHaveBeenCalledWith({ type: 'reachedZero' });
-    
+
     unmount();
   });
 
@@ -321,7 +324,54 @@ describe('useWorkflow', () => {
 
     expect(result.current.value).toBe(10);
     expect(result.current.doubled).toBe(20);
-    
+
+    unmount();
+  });
+
+  it('should start newly declared workers after the rerender commits', () => {
+    interface WorkerProps {
+      readonly enabled: boolean;
+    }
+
+    interface WorkerRendering {
+      readonly startsObservedAfterDeclaration: number;
+    }
+
+    let starts = 0;
+    const worker = createWorker('deferred-react-worker', async (signal) => {
+      starts += 1;
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const workflow: Workflow<WorkerProps, null, never, WorkerRendering> = {
+      initialState: () => null,
+      render: (props, _state, ctx) => {
+        if (props.enabled) {
+          ctx.runWorker(worker, 'deferred-react-worker', () => (state) => ({ state }));
+        }
+        return { startsObservedAfterDeclaration: starts };
+      },
+    };
+
+    const { result, rerender, unmount } = renderHook(
+      ({ enabled }) => useWorkflow(workflow, { enabled }),
+      {
+        initialProps: { enabled: false },
+      },
+    );
+
+    expect(result.current.startsObservedAfterDeclaration).toBe(0);
+    expect(starts).toBe(0);
+
+    rerender({ enabled: true });
+
+    expect(result.current.startsObservedAfterDeclaration).toBe(0);
+    expect(starts).toBe(1);
+
     unmount();
   });
 
@@ -652,8 +702,9 @@ describe('useWorkflow', () => {
       render: (props) => ({
         renderCount: ++renderCount,
         labels: [...props.values]
-          .filter((value): value is Extract<MixedSetValue, { readonly label: string }> =>
-            typeof value === 'object' && value !== null && 'label' in value,
+          .filter(
+            (value): value is Extract<MixedSetValue, { readonly label: string }> =>
+              typeof value === 'object' && value !== null && 'label' in value,
           )
           .map((value) => value.label),
       }),
@@ -813,7 +864,9 @@ describe('useWorkflow', () => {
     try {
       expect(() => {
         renderHook(() =>
-          useWorkflow(anyPropsWorkflow, { value: new URL('https://example.com') as unknown as AllowedProp }),
+          useWorkflow(anyPropsWorkflow, {
+            value: new URL('https://example.com') as unknown as AllowedProp,
+          }),
         );
       }).toThrow(/Unsupported workflow props at "props\.value": URL/);
     } finally {
@@ -868,9 +921,7 @@ describe('useWorkflow', () => {
   });
 
   it('should dispose runtime on unmount', () => {
-    const { result, unmount } = renderHook(() =>
-      useWorkflow(counterWorkflow, undefined),
-    );
+    const { result, unmount } = renderHook(() => useWorkflow(counterWorkflow, undefined));
 
     // Runtime should be working
     act(() => {
@@ -879,7 +930,9 @@ describe('useWorkflow', () => {
     expect(result.current.count).toBe(1);
 
     // Unmount should not throw
-    expect(() => { unmount(); }).not.toThrow();
+    expect(() => {
+      unmount();
+    }).not.toThrow();
   });
 
   it('should unsubscribe old outputHandler and not double-call after rerender with new handler', () => {
@@ -990,7 +1043,9 @@ describe('useWorkflow', () => {
       readonly count: number;
       readonly increment: () => void;
     }
-    const createResetWorkflow = (workflowId: string): Workflow<void, ResetState, never, ResetRendering> => ({
+    const createResetWorkflow = (
+      workflowId: string,
+    ): Workflow<void, ResetState, never, ResetRendering> => ({
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => ({
         workflowId,
@@ -1052,7 +1107,9 @@ describe('useWorkflow', () => {
       readonly increment: () => void;
     }
 
-    const createOutputWorkflow = (source: string): Workflow<void, OutputState, WorkflowOutput, OutputRendering> => ({
+    const createOutputWorkflow = (
+      source: string,
+    ): Workflow<void, OutputState, WorkflowOutput, OutputRendering> => ({
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => ({
         source,
@@ -1074,8 +1131,7 @@ describe('useWorkflow', () => {
     const onOutput = vi.fn();
 
     const { result, rerender, unmount } = renderHook(
-      ({ workflow }) =>
-        useWorkflow(workflow, undefined, onOutput, { resetOnWorkflowChange: true }),
+      ({ workflow }) => useWorkflow(workflow, undefined, onOutput, { resetOnWorkflowChange: true }),
       { initialProps: { workflow: workflowA } },
     );
 
@@ -1105,7 +1161,9 @@ describe('useWorkflow', () => {
       readonly count: number;
       readonly increment: () => void;
     }
-    const createStableWorkflow = (workflowId: string): Workflow<void, StableState, never, StableRendering> => ({
+    const createStableWorkflow = (
+      workflowId: string,
+    ): Workflow<void, StableState, never, StableRendering> => ({
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => ({
         workflowId,
@@ -1237,7 +1295,7 @@ describe('useWorkflowWithState', () => {
     expect(result.current.props).toBeUndefined();
     expect(typeof result.current.updateProps).toBe('function');
     expect(typeof result.current.snapshot).toBe('function');
-    
+
     unmount();
   });
 
@@ -1252,7 +1310,7 @@ describe('useWorkflowWithState', () => {
 
     expect(result.current.state.count).toBe(1);
     expect(result.current.rendering.count).toBe(1);
-    
+
     unmount();
   });
 
@@ -1269,7 +1327,7 @@ describe('useWorkflowWithState', () => {
 
     expect(result.current.rendering.value).toBe(20);
     expect(result.current.props.initial).toBe(20);
-    
+
     unmount();
   });
 

@@ -54,6 +54,7 @@ export function useWorkflow<P extends AllowedProp, S, O, R>(
     createRuntime: (workflowToRun, runtimeProps, runtimeOnOutput) => {
       return createRuntime(workflowToRun, runtimeProps, {
         onOutput: runtimeOnOutput,
+        effectMode: 'manual',
       });
     },
     onOutput,
@@ -200,6 +201,7 @@ export function useWorkflowWithState<P extends AllowedProp, S, O, R>(
     createRuntime: (workflowToRun, runtimeProps, runtimeOnOutput) => {
       return createRuntime(workflowToRun, runtimeProps, {
         onOutput: runtimeOnOutput,
+        effectMode: 'manual',
       });
     },
     onOutput: options.onOutput,

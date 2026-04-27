@@ -2,9 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": false,
+    "rootDir": "../..",
+    "baseUrl": ".",
     "lib": ["ES2022", "DOM"],
     "jsx": "react-jsx",
-    "types": ["vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@workflow-ts/core": ["../../packages/core/src/index.ts"],
+      "@workflow-ts/react": ["../../packages/react/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
 }

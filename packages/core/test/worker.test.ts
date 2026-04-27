@@ -18,11 +18,7 @@ import { WorkerManager } from '../src/worker';
  * Create a worker that resolves after a delay.
  * Useful for testing async worker lifecycle.
  */
-function createDelayedWorker<T>(
-  key: string,
-  delayMs: number,
-  value: T,
-): Worker<T> {
+function createDelayedWorker<T>(key: string, delayMs: number, value: T): Worker<T> {
   return createWorker(key, async (signal) => {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(resolve, delayMs);
@@ -69,24 +65,14 @@ function createInstrumentedAbortController(): {
   let aborted = false;
   const abortListeners = new Set<EventListener>();
 
-  const addAbortListenerSpy = vi.fn(
-    (
-      type: string,
-      listener: unknown,
-      _options?: unknown,
-    ): void => {
-      if (type !== 'abort') return;
-      if (typeof listener !== 'function') return;
-      abortListeners.add(listener);
-    },
-  );
+  const addAbortListenerSpy = vi.fn((type: string, listener: unknown, _options?: unknown): void => {
+    if (type !== 'abort') return;
+    if (typeof listener !== 'function') return;
+    abortListeners.add(listener);
+  });
 
   const removeAbortListenerSpy = vi.fn(
-    (
-      type: string,
-      listener: unknown,
-      _options?: unknown,
-    ): void => {
+    (type: string, listener: unknown, _options?: unknown): void => {
       if (type !== 'abort') return;
       if (typeof listener !== 'function') return;
       abortListeners.delete(listener);
@@ -118,7 +104,6 @@ function createInstrumentedAbortController(): {
     removeAbortListenerSpy,
   };
 }
-
 
 // ============================================================
 // WorkerManager Tests
@@ -208,7 +193,37 @@ describe('WorkerManager', () => {
 
         expect(manager.isRunning('test')).toBe(false);
         expect(manager.activeWorkerCount).toBe(0);
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Worker test onComplete error:', onCompleteError);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Worker test onComplete error:',
+          onCompleteError,
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('should call onComplete when worker throws synchronously', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const workerError = new Error('worker failed');
+      const onCompleteError = new Error('onComplete failed');
+      const worker = createWorker('test', () => {
+        throw workerError;
+      });
+      const onComplete = vi.fn(() => {
+        throw onCompleteError;
+      });
+
+      try {
+        manager.startWorker(worker, 'test', vi.fn(), onComplete);
+
+        expect(manager.isRunning('test')).toBe(false);
+        expect(manager.activeWorkerCount).toBe(0);
+        expect(onComplete).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Worker test error:', workerError);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Worker test onComplete error:',
+          onCompleteError,
+        );
       } finally {
         consoleErrorSpy.mockRestore();
       }
@@ -336,6 +351,228 @@ describe('Workflow with workers', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(started).toBe(true);
+    runtime.dispose();
+  });
+
+  it('should defer workers in manual effect mode until effects are started', async () => {
+    let starts = 0;
+    const testWorker = createWorker('test', async () => {
+      starts += 1;
+      return 'done';
+    });
+
+    const workflow: Workflow<boolean, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'initial', workerRunning: false }),
+      render: (props, state, ctx) => {
+        if (props) {
+          ctx.runWorker(testWorker, 'test', (output) => (s) => ({
+            state: { ...s, value: output },
+          }));
+        }
+        return {
+          value: state.value,
+          toggleWorker: () => {},
+        };
+      },
+    };
+
+    const runtime = createRuntime(workflow, true, { effectMode: 'manual' });
+    runtime.getRendering();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(starts).toBe(0);
+
+    runtime.startEffects();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(starts).toBe(1);
+
+    runtime.dispose();
+  });
+
+  it('should defer newly declared manual workers until the next effects start', () => {
+    let starts = 0;
+    const testWorker = createWorker('test', async () => {
+      starts += 1;
+      return 'done';
+    });
+
+    const workflow: Workflow<void, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'initial', workerRunning: false }),
+      render: (_props, state, ctx) => {
+        if (state.workerRunning) {
+          ctx.runWorker(testWorker, 'test', (output) => (s) => ({
+            state: { ...s, value: output },
+          }));
+        }
+        return {
+          value: state.value,
+          toggleWorker: () => {
+            ctx.actionSink.send((s) => ({
+              state: { ...s, workerRunning: true },
+            }));
+          },
+        };
+      },
+    };
+
+    const runtime = createRuntime(workflow, undefined, { effectMode: 'manual' });
+    const rendering = runtime.getRendering();
+    runtime.startEffects();
+    expect(starts).toBe(0);
+
+    rendering.toggleWorker();
+    runtime.getRendering();
+    expect(starts).toBe(0);
+
+    runtime.startEffects();
+    expect(starts).toBe(1);
+
+    runtime.dispose();
+  });
+
+  it('should defer stopping omitted manual workers until the next effects start', () => {
+    let starts = 0;
+    let signal: AbortSignal | undefined;
+    const testWorker = createWorker('test', async (receivedSignal) => {
+      starts += 1;
+      signal = receivedSignal;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(resolve, 10000);
+        receivedSignal.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const workflow: Workflow<boolean, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'initial', workerRunning: false }),
+      render: (props, state, ctx) => {
+        if (props) {
+          ctx.runWorker(testWorker, 'test', () => (s) => ({ state: s }));
+        }
+        return {
+          value: state.value,
+          toggleWorker: () => {},
+        };
+      },
+    };
+
+    const runtime = createRuntime(workflow, true, { effectMode: 'manual' });
+    runtime.getRendering();
+    runtime.startEffects();
+    expect(starts).toBe(1);
+    expect(signal?.aborted).toBe(false);
+
+    runtime.updateProps(false);
+    runtime.getRendering();
+    expect(signal?.aborted).toBe(false);
+
+    runtime.updateProps(true);
+    runtime.getRendering();
+    runtime.startEffects();
+    expect(starts).toBe(1);
+    expect(signal?.aborted).toBe(false);
+
+    runtime.updateProps(false);
+    runtime.getRendering();
+    expect(signal?.aborted).toBe(false);
+
+    runtime.startEffects();
+    expect(signal?.aborted).toBe(true);
+
+    runtime.dispose();
+  });
+
+  it('should defer child workflow manual workers until the parent effects start', () => {
+    let starts = 0;
+    const childWorker = createWorker('child', async () => {
+      starts += 1;
+      return 'done';
+    });
+
+    const childWorkflow: Workflow<void, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'child', workerRunning: true }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(childWorker, 'child', (output) => (s) => ({
+          state: { ...s, value: output },
+        }));
+        return {
+          value: state.value,
+          toggleWorker: () => {},
+        };
+      },
+    };
+
+    const parentWorkflow: Workflow<void, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'parent', workerRunning: false }),
+      render: (_props, state, ctx) => {
+        if (state.workerRunning) {
+          ctx.renderChild(childWorkflow, undefined, 'child');
+        }
+        return {
+          value: state.value,
+          toggleWorker: () => {
+            ctx.actionSink.send((s) => ({
+              state: { ...s, workerRunning: true },
+            }));
+          },
+        };
+      },
+    };
+
+    const runtime = createRuntime(parentWorkflow, undefined, { effectMode: 'manual' });
+    const rendering = runtime.getRendering();
+    runtime.startEffects();
+    expect(starts).toBe(0);
+
+    rendering.toggleWorker();
+    runtime.getRendering();
+    expect(starts).toBe(0);
+
+    runtime.startEffects();
+    expect(starts).toBe(1);
+
+    runtime.dispose();
+  });
+
+  it('should stop and restart declared workers when manual effects are toggled', async () => {
+    let starts = 0;
+    let signal: AbortSignal | undefined;
+    const testWorker = createWorker('test', async (receivedSignal) => {
+      starts += 1;
+      signal = receivedSignal;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(resolve, 10000);
+        receivedSignal.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const workflow: Workflow<void, TestState, never, TestRendering> = {
+      initialState: () => ({ value: 'initial', workerRunning: false }),
+      render: (_props, state, ctx) => {
+        ctx.runWorker(testWorker, 'test', () => (s) => ({ state: s }));
+        return {
+          value: state.value,
+          toggleWorker: () => {},
+        };
+      },
+    };
+
+    const runtime = createRuntime(workflow, undefined, { effectMode: 'manual' });
+    runtime.getRendering();
+    runtime.startEffects();
+    expect(starts).toBe(1);
+    expect(signal?.aborted).toBe(false);
+
+    runtime.stopEffects();
+    expect(signal?.aborted).toBe(true);
+
+    runtime.startEffects();
+    expect(starts).toBe(2);
+
     runtime.dispose();
   });
 
@@ -478,7 +715,9 @@ describe('Workflow with workers', () => {
 const setGlobalForWorkerTest = (key: string, value: unknown): (() => void) => {
   const runtimeGlobals = globalThis as Record<string, unknown>;
   const hadOwnKey = Object.prototype.hasOwnProperty.call(runtimeGlobals, key);
-  const previousDescriptor = hadOwnKey ? Object.getOwnPropertyDescriptor(runtimeGlobals, key) : undefined;
+  const previousDescriptor = hadOwnKey
+    ? Object.getOwnPropertyDescriptor(runtimeGlobals, key)
+    : undefined;
 
   if (previousDescriptor?.configurable === false) {
     const previousValue = runtimeGlobals[key];
@@ -553,7 +792,9 @@ describe('Worker execution environment guard', () => {
 
       expect(workerRuns).toBe(0);
       expect(warningSpy).toHaveBeenCalledTimes(1);
-      expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('blocked in this environment'));
+      expect(warningSpy).toHaveBeenCalledWith(
+        expect.stringContaining('blocked in this environment'),
+      );
 
       runtime.dispose();
     } finally {
@@ -629,7 +870,9 @@ describe('Worker execution environment guard', () => {
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => {
         if (state.count === 0) {
-          ctx.runWorker(testWorker, 'react-native-key', (value) => () => ({ state: { count: value } }));
+          ctx.runWorker(testWorker, 'react-native-key', (value) => () => ({
+            state: { count: value },
+          }));
         }
         return { count: state.count };
       },
@@ -715,7 +958,9 @@ describe('Worker execution environment guard', () => {
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => {
         if (state.count === 0) {
-          ctx.runWorker(testWorker, 'test-global-key', (value) => () => ({ state: { count: value } }));
+          ctx.runWorker(testWorker, 'test-global-key', (value) => () => ({
+            state: { count: value },
+          }));
         }
         return { count: state.count };
       },
@@ -751,7 +996,9 @@ describe('Worker execution environment guard', () => {
       initialState: () => ({ count: 0 }),
       render: (_props, state, ctx) => {
         if (state.count === 0) {
-          ctx.runWorker(childWorker, 'child-worker-key', (value) => () => ({ state: { count: value } }));
+          ctx.runWorker(childWorker, 'child-worker-key', (value) => () => ({
+            state: { count: value },
+          }));
         }
         return { count: state.count };
       },
@@ -831,7 +1078,9 @@ describe('Disposal reentrancy (regression: "Cannot use disposed workflow runtime
     const consoleErrors: unknown[][] = [];
     vi.spyOn(console, 'error').mockImplementation((...args) => consoleErrors.push(args));
 
-    interface Output { type: 'done' }
+    interface Output {
+      type: 'done';
+    }
     const worker = createWorker('test', async () => 'result');
 
     const workflow: Workflow<void, { count: number }, Output, { count: number }> = {

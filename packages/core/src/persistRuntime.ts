@@ -16,6 +16,7 @@ type PersistOperation =
   | 'serialize'
   | 'onPersist'
   | 'onRehydrate'
+  | 'onRehydrateSkipped'
   | 'deserialize'
   | 'migrate';
 
@@ -48,12 +49,18 @@ export interface PersistConfig<P, S, O, R> extends Omit<
   readonly migrate?: PersistMigrate;
   readonly onPersist?: (snapshot: string) => void;
   readonly onRehydrate?: (snapshot: string) => void;
+  readonly onRehydrateSkipped?: (snapshot: string, reason: 'stateChanged') => void;
   readonly onError?: (error: unknown, context: PersistErrorContext) => void;
 }
 
 interface PersistRuntimeInternals<P, S, O, R> {
   readonly runtime: WorkflowRuntime<P, S, O, R>;
-  readonly applyHydrationValue: (storedValue: string) => void;
+  readonly applyHydrationValue: (
+    storedValue: string,
+    expectedStateChangeGeneration?: number,
+  ) => void;
+  readonly getStateChangeGeneration: () => number;
+  readonly isPersistDisposed: () => boolean;
 }
 
 interface RehydratedState<S> {
@@ -184,6 +191,7 @@ const pickRuntimeConfig = <P, S, O, R>(
     interceptors,
     devTools: config.devTools,
     propsEqual: config.propsEqual,
+    effectMode: config.effectMode,
   };
 };
 
@@ -198,7 +206,8 @@ const decodePersistEnvelope = (raw: string): PersistEnvelope => {
   }
 
   const candidate = parsed as { readonly v?: unknown; readonly data?: unknown };
-  if (!Number.isInteger(candidate.v) || (candidate.v as number) < 1) {
+  const version = candidate.v;
+  if (!Number.isInteger(version) || (version as number) < 1) {
     throw new Error('Persisted payload envelope field "v" must be an integer >= 1');
   }
 
@@ -207,7 +216,7 @@ const decodePersistEnvelope = (raw: string): PersistEnvelope => {
   }
 
   return {
-    v: candidate.v as number,
+    v: version as number,
     data: candidate.data,
   };
 };
@@ -308,10 +317,15 @@ const createPersistRuntimeInternals = <P, S, O, R>(
   const serializeState = config.serialize;
   const deserializeState = config.deserialize;
 
+  let stateChangeGeneration = 0;
   let pendingSnapshot: string | undefined;
   let latestSnapshot: string | undefined;
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  let writeChain: Promise<void> = Promise.resolve();
+  // A single in-flight write promise + a FIFO of queued writes. We intentionally
+  // avoid `writeChain = writeChain.then(...)` style chaining, which retains every
+  // historical .then in the promise graph for the life of the runtime.
+  const writeQueue: { readonly snapshot: string; readonly force: boolean }[] = [];
+  let writeInFlight: Promise<void> | undefined;
   let persistDisposed = false;
 
   const removePersistedValue = (): void => {
@@ -324,36 +338,51 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     });
   };
 
-  const enqueuePersist = (snapshot: string, options?: EnqueuePersistOptions): void => {
-    const force = options?.force ?? false;
+  const performWrite = async (snapshot: string, force: boolean): Promise<void> => {
+    if (persistDisposed && !force) {
+      return;
+    }
 
-    writeChain = writeChain.then(async () => {
-      if (persistDisposed && !force) {
-        return;
-      }
+    try {
+      const envelope = encodePersistEnvelope(config.version, snapshot);
+      await asyncStorage.setItem(config.key, envelope);
+    } catch (error) {
+      reportError(error, {
+        phase: 'persist',
+        operation: 'setItem',
+        key: config.key,
+      });
+      return;
+    }
 
-      try {
-        const envelope = encodePersistEnvelope(config.version, snapshot);
-        await asyncStorage.setItem(config.key, envelope);
-      } catch (error) {
-        reportError(error, {
-          phase: 'persist',
-          operation: 'setItem',
-          key: config.key,
-        });
-        return;
-      }
+    try {
+      config.onPersist?.(snapshot);
+    } catch (error) {
+      reportError(error, {
+        phase: 'persist',
+        operation: 'onPersist',
+        key: config.key,
+      });
+    }
+  };
 
-      try {
-        config.onPersist?.(snapshot);
-      } catch (error) {
-        reportError(error, {
-          phase: 'persist',
-          operation: 'onPersist',
-          key: config.key,
-        });
-      }
+  const drainWriteQueue = (): void => {
+    if (writeInFlight !== undefined) {
+      return;
+    }
+    const next = writeQueue.shift();
+    if (next === undefined) {
+      return;
+    }
+    writeInFlight = performWrite(next.snapshot, next.force).finally(() => {
+      writeInFlight = undefined;
+      drainWriteQueue();
     });
+  };
+
+  const enqueuePersist = (snapshot: string, options?: EnqueuePersistOptions): void => {
+    writeQueue.push({ snapshot, force: options?.force ?? false });
+    drainWriteQueue();
   };
 
   const schedulePersist = (snapshot: string): void => {
@@ -400,8 +429,20 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     }
   };
 
+  const stateChangeTrackingInterceptor = createInterceptor<S, O>('persist-state-change-tracking', {
+    onStateChange: (change) => {
+      if (change.reason === 'action' && change.actionName === HYDRATE_ACTION_NAME) {
+        return;
+      }
+      stateChangeGeneration += 1;
+    },
+  });
   const persistInterceptor = createPersistInterceptor(schedulePersist, getSnapshotForState);
-  const interceptors = [...(config.interceptors ?? []), persistInterceptor];
+  const interceptors = [
+    ...(config.interceptors ?? []),
+    stateChangeTrackingInterceptor,
+    persistInterceptor,
+  ];
 
   const runtime = createRuntime(
     workflow,
@@ -430,7 +471,10 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     originalDispose();
   };
 
-  const applyHydrationValue = (storedValue: string): void => {
+  const applyHydrationValue = (
+    storedValue: string,
+    expectedStateChangeGeneration?: number,
+  ): void => {
     // Lazy hydration may resolve after runtime disposal (e.g. async storage read).
     // In that case, skip hydration silently instead of reporting a misleading
     // storage-read error from disposed runtime access.
@@ -450,6 +494,22 @@ const createPersistRuntimeInternals = <P, S, O, R>(
       return;
     }
 
+    if (
+      expectedStateChangeGeneration !== undefined &&
+      stateChangeGeneration !== expectedStateChangeGeneration
+    ) {
+      try {
+        config.onRehydrateSkipped?.(result.data, 'stateChanged');
+      } catch (error) {
+        reportError(error, {
+          phase: 'rehydrate',
+          operation: 'onRehydrateSkipped',
+          key: config.key,
+        });
+      }
+      return;
+    }
+
     runtime.send(createHydrateAction<S, O>(result.state));
     invokeOnRehydrate(result.data, config, reportError);
   };
@@ -457,6 +517,8 @@ const createPersistRuntimeInternals = <P, S, O, R>(
   return {
     runtime,
     applyHydrationValue,
+    getStateChangeGeneration: (): number => stateChangeGeneration,
+    isPersistDisposed: (): boolean => persistDisposed,
   };
 };
 
@@ -481,36 +543,80 @@ export function createPersistedRuntime<P, S, O, R>(
     return internals.runtime;
   }
 
-  const applyHydrationValue = (storedValue: string | null): void => {
+  const applyHydrationValue = (
+    storedValue: string | null,
+    expectedStateChangeGeneration: number,
+  ): void => {
     if (storedValue === null) {
       return;
     }
-    internals.applyHydrationValue(storedValue);
+    internals.applyHydrationValue(storedValue, expectedStateChangeGeneration);
   };
 
-  try {
-    const storedValue = config.storage.getItem(config.key);
-    if (isPromiseLike<string | null>(storedValue)) {
-      void storedValue
-        .then((resolvedValue) => {
-          applyHydrationValue(resolvedValue);
-        })
-        .catch((error) => {
-          reportError(error, {
-            phase: 'rehydrate',
-            operation: 'getItem',
-            key: config.key,
-          });
-        });
-    } else {
-      applyHydrationValue(storedValue);
+  let lazyReadStarted = false;
+  let lazyReadCompletion: Promise<void> | undefined;
+  const startLazyRehydrate = (): Promise<void> | undefined => {
+    if (lazyReadStarted) {
+      return lazyReadCompletion;
     }
-  } catch (error) {
-    reportError(error, {
-      phase: 'rehydrate',
-      operation: 'getItem',
-      key: config.key,
-    });
+    lazyReadStarted = true;
+    const expectedStateChangeGeneration = internals.getStateChangeGeneration();
+
+    try {
+      const storedValue = config.storage.getItem(config.key);
+      if (isPromiseLike<string | null>(storedValue)) {
+        lazyReadCompletion = storedValue
+          .then((resolvedValue) => {
+            applyHydrationValue(resolvedValue, expectedStateChangeGeneration);
+          })
+          .catch((error) => {
+            // Late rejection after dispose: runtime is already gone, so suppress
+            // to avoid a misleading "getItem failed" warning for a torn-down runtime.
+            if (internals.isPersistDisposed()) {
+              return;
+            }
+            reportError(error, {
+              phase: 'rehydrate',
+              operation: 'getItem',
+              key: config.key,
+            });
+          })
+          .finally(() => {
+            lazyReadCompletion = undefined;
+          });
+        return lazyReadCompletion;
+      } else {
+        applyHydrationValue(storedValue, expectedStateChangeGeneration);
+      }
+    } catch (error) {
+      reportError(error, {
+        phase: 'rehydrate',
+        operation: 'getItem',
+        key: config.key,
+      });
+    }
+    return undefined;
+  };
+
+  if (config.effectMode === 'manual') {
+    const originalStartEffects = internals.runtime.startEffects.bind(internals.runtime);
+    const startEffectsAfterLazyRehydrate = (): void => {
+      if (internals.isPersistDisposed() || internals.runtime.isDisposed()) {
+        return;
+      }
+      internals.runtime.getRendering();
+      originalStartEffects();
+    };
+    internals.runtime.startEffects = (): void => {
+      const readCompletion = startLazyRehydrate();
+      if (readCompletion === undefined) {
+        startEffectsAfterLazyRehydrate();
+        return;
+      }
+      void readCompletion.finally(startEffectsAfterLazyRehydrate);
+    };
+  } else {
+    startLazyRehydrate();
   }
 
   return internals.runtime;
@@ -601,21 +707,61 @@ export async function createPersistedRuntimeAsync<P, S, O, R>(
     return internals.runtime;
   }
 
-  void asyncStorage
-    .getItem(config.key)
-    .then((storedValue) => {
-      if (storedValue === null) {
+  let lazyReadStarted = false;
+  let lazyReadCompletion: Promise<void> | undefined;
+  const startLazyRehydrate = (): Promise<void> | undefined => {
+    if (lazyReadStarted) {
+      return lazyReadCompletion;
+    }
+    lazyReadStarted = true;
+    const expectedStateChangeGeneration = internals.getStateChangeGeneration();
+
+    lazyReadCompletion = asyncStorage
+      .getItem(config.key)
+      .then((storedValue) => {
+        if (storedValue === null) {
+          return;
+        }
+        internals.applyHydrationValue(storedValue, expectedStateChangeGeneration);
+      })
+      .catch((error) => {
+        // Late rejection after dispose: runtime is already gone, so suppress
+        // to avoid a misleading "getItem failed" warning for a torn-down runtime.
+        if (internals.isPersistDisposed()) {
+          return;
+        }
+        reportError(error, {
+          phase: 'rehydrate',
+          operation: 'getItem',
+          key: config.key,
+        });
+      })
+      .finally(() => {
+        lazyReadCompletion = undefined;
+      });
+    return lazyReadCompletion;
+  };
+
+  if (config.effectMode === 'manual') {
+    const originalStartEffects = internals.runtime.startEffects.bind(internals.runtime);
+    const startEffectsAfterLazyRehydrate = (): void => {
+      if (internals.isPersistDisposed() || internals.runtime.isDisposed()) {
         return;
       }
-      internals.applyHydrationValue(storedValue);
-    })
-    .catch((error) => {
-      reportError(error, {
-        phase: 'rehydrate',
-        operation: 'getItem',
-        key: config.key,
-      });
-    });
+      internals.runtime.getRendering();
+      originalStartEffects();
+    };
+    internals.runtime.startEffects = (): void => {
+      const readCompletion = startLazyRehydrate();
+      if (readCompletion === undefined) {
+        startEffectsAfterLazyRehydrate();
+        return;
+      }
+      void readCompletion.finally(startEffectsAfterLazyRehydrate);
+    };
+  } else {
+    startLazyRehydrate();
+  }
 
   return internals.runtime;
 }

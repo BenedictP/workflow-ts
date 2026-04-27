@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { action, createRuntime, type Workflow } from '../src';
+import { action, createRuntime, createWorker, type Workflow } from '../src';
 import {
   createPersistedRuntime,
   createPersistedRuntimeAsync,
@@ -141,6 +141,123 @@ describe('persistRuntime v3', () => {
     expect(runtime.getState()).toEqual({ count: 11 });
   });
 
+  it('sync API lazy mode skips async hydration after local state changes', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+    const onRehydrate = vi.fn();
+    const onRehydrateSkipped = vi.fn();
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onRehydrate,
+      onRehydrateSkipped,
+    });
+
+    runtime.getRendering().increment();
+    expect(runtime.getState()).toEqual({ count: 1 });
+
+    resolveGet?.(envelope('{"count":11}'));
+    await waitForMicrotasks();
+
+    expect(runtime.getState()).toEqual({ count: 1 });
+    expect(onRehydrate).not.toHaveBeenCalled();
+    expect(onRehydrateSkipped).toHaveBeenCalledWith('{"count":11}', 'stateChanged');
+    runtime.dispose();
+  });
+
+  it('sync API manual effect mode defers lazy storage reads until effects start', () => {
+    const { storage, getItem } = createStorageSpy(envelope('{"count":5}'));
+
+    const runtime = createPersistedRuntime(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      effectMode: 'manual',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+    });
+
+    expect(getItem).not.toHaveBeenCalled();
+    expect(runtime.getState()).toEqual({ count: 0 });
+
+    runtime.startEffects();
+
+    expect(getItem).toHaveBeenCalledWith('counter');
+    expect(runtime.getState()).toEqual({ count: 5 });
+    runtime.dispose();
+  });
+
+  it('sync API manual effect mode starts lazy hydration before workers', async () => {
+    const onRehydrate = vi.fn();
+    const onRehydrateSkipped = vi.fn();
+    let workerStarts = 0;
+    const workerWorkflow: Workflow<void, CounterState, never, CounterRendering> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(
+            createWorker('increment-on-start', async () => {
+              workerStarts += 1;
+              return 1;
+            }),
+            'increment-on-start',
+            (amount) => (current) => ({
+              state: { count: current.count + amount },
+            }),
+          );
+        }
+        return {
+          count: state.count,
+          increment: () => {},
+        };
+      },
+    };
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(() => Promise.resolve(envelope('{"count":5}'))),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = createPersistedRuntime(workerWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      effectMode: 'manual',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onRehydrate,
+      onRehydrateSkipped,
+    });
+
+    runtime.getRendering();
+    runtime.startEffects();
+    await waitForMicrotasks();
+
+    expect(onRehydrate).toHaveBeenCalledWith('{"count":5}');
+    expect(onRehydrateSkipped).not.toHaveBeenCalled();
+    expect(workerStarts).toBe(0);
+    expect(runtime.getState()).toEqual({ count: 5 });
+    runtime.dispose();
+  });
+
   it('async API defaults to blocking and returns hydrated state', async () => {
     const storage: PersistStorage = {
       getItem: vi.fn(async () => envelope('{"count":7}')),
@@ -188,6 +305,95 @@ describe('persistRuntime v3', () => {
     await waitForMicrotasks();
 
     expect(runtime.getState()).toEqual({ count: 9 });
+  });
+
+  it('async API lazy mode skips async hydration after local state changes', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+    const onRehydrateSkipped = vi.fn();
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = await createPersistedRuntimeAsync(counterWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onRehydrateSkipped,
+    });
+
+    runtime.getRendering().increment();
+    resolveGet?.(envelope('{"count":9}'));
+    await waitForMicrotasks();
+
+    expect(runtime.getState()).toEqual({ count: 1 });
+    expect(onRehydrateSkipped).toHaveBeenCalledWith('{"count":9}', 'stateChanged');
+    runtime.dispose();
+  });
+
+  it('async API manual effect mode starts lazy hydration before workers', async () => {
+    const onRehydrate = vi.fn();
+    const onRehydrateSkipped = vi.fn();
+    let workerStarts = 0;
+    const workerWorkflow: Workflow<void, CounterState, never, CounterRendering> = {
+      initialState: () => ({ count: 0 }),
+      render: (_props, state, ctx) => {
+        if (state.count === 0) {
+          ctx.runWorker(
+            createWorker('increment-on-start', async () => {
+              workerStarts += 1;
+              return 1;
+            }),
+            'increment-on-start',
+            (amount) => (current) => ({
+              state: { count: current.count + amount },
+            }),
+          );
+        }
+        return {
+          count: state.count,
+          increment: () => {},
+        };
+      },
+    };
+
+    const storage: PersistStorage = {
+      getItem: vi.fn(() => Promise.resolve(envelope('{"count":5}'))),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const runtime = await createPersistedRuntimeAsync(workerWorkflow, undefined, {
+      storage,
+      key: 'counter',
+      version: PERSIST_VERSION,
+      rehydrate: 'lazy',
+      effectMode: 'manual',
+      serialize: counterSerialize,
+      deserialize: counterDeserialize,
+      onRehydrate,
+      onRehydrateSkipped,
+    });
+
+    runtime.getRendering();
+    runtime.startEffects();
+    await waitForMicrotasks();
+
+    expect(onRehydrate).toHaveBeenCalledWith('{"count":5}');
+    expect(onRehydrateSkipped).not.toHaveBeenCalled();
+    expect(workerStarts).toBe(0);
+    expect(runtime.getState()).toEqual({ count: 5 });
+    runtime.dispose();
   });
 
   it('async API lazy mode continues when storage getItem throws synchronously', async () => {

@@ -1,8 +1,17 @@
 import { act, renderHook } from '@testing-library/react';
-import { memoryStorage, type PersistStorage, type SyncStorage, type Workflow } from '@workflow-ts/core';
+import {
+  memoryStorage,
+  type PersistStorage,
+  type SyncStorage,
+  type Workflow,
+} from '@workflow-ts/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { __testing, usePersistedWorkflow, type PersistKeyResolver } from '../src/usePersistedWorkflow';
+import {
+  __testing,
+  usePersistedWorkflow,
+  type PersistKeyResolver,
+} from '../src/usePersistedWorkflow';
 
 interface CounterState {
   readonly count: number;
@@ -209,6 +218,50 @@ describe('usePersistedWorkflow', () => {
     expect(result.current.persistence.phase).toBe('ready');
     expect(result.current.persistence.isHydrated).toBe(true);
     expect(result.current.persistence.lastRehydratedAt).toEqual(expect.any(Number));
+  });
+
+  it('skips async lazy hydration when local state changes first', async () => {
+    let resolveGet: ((value: string | null) => void) | undefined;
+    const onRehydrateSkipped = vi.fn();
+    const storage: PersistStorage = {
+      getItem: vi.fn(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveGet = resolve;
+          }),
+      ),
+      setItem: vi.fn(async () => undefined),
+      removeItem: vi.fn(async () => undefined),
+    };
+
+    const { result } = renderHook(() =>
+      usePersistedWorkflow(counterWorkflow, {
+        props: undefined,
+        persist: {
+          storage,
+          key: 'counter',
+          version: PERSIST_VERSION,
+          rehydrate: 'lazy',
+          serialize: counterSerialize,
+          deserialize: counterDeserialize,
+          onRehydrateSkipped,
+        },
+      }),
+    );
+
+    act(() => {
+      result.current.rendering.increment();
+    });
+    expect(result.current.rendering.count).toBe(1);
+
+    resolveGet?.(envelope('{"count":6}'));
+    await waitForMicrotasks();
+
+    expect(result.current.rendering.count).toBe(1);
+    expect(result.current.persistence.phase).toBe('ready');
+    expect(result.current.persistence.isHydrated).toBe(false);
+    expect(result.current.persistence.lastRehydratedAt).toEqual(expect.any(Number));
+    expect(onRehydrateSkipped).toHaveBeenCalledWith('{"count":6}', 'stateChanged');
   });
 
   it('marks persistence ready when async storage resolves with no value', async () => {

@@ -195,9 +195,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const shouldBeActiveRef = useRef(true);
 
   const persistenceStoreRef = useRef<PersistenceStore | null>(null);
-  if (persistenceStoreRef.current === null) {
-    persistenceStoreRef.current = createPersistenceStore();
-  }
+  persistenceStoreRef.current ??= createPersistenceStore();
   const persistenceStore = persistenceStoreRef.current;
   const runtimeTokenRef = useRef(0);
   const isCreatingRuntimeRef = useRef(false);

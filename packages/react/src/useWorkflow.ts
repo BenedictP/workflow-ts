@@ -35,19 +35,49 @@ export type { AllowedProp, AllowedPropPrimitive, AllowedTypedArray };
  * );
  * ```
  */
-export type UseWorkflowHookOptions<O> = WorkflowRuntimeOptions<O>;
+export interface UseWorkflowHookOptions<O> extends WorkflowRuntimeOptions<O> {
+  /** Custom comparator for selector values. Defaults to Object.is */
+  compare?: (a: unknown, b: unknown) => boolean;
+}
+
+const empty = Symbol('empty');
 
 export function useWorkflow<P extends AllowedProp, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
   onOutput?: (output: O) => void,
   options?: UseWorkflowHookOptions<O>,
-): R {
+): R;
+
+export function useWorkflow<P extends AllowedProp, S, O, R, T>(
+  workflow: Workflow<P, S, O, R>,
+  props: P,
+  onOutput: ((output: O) => void) | undefined,
+  options: UseWorkflowHookOptions<O> & { select: (rendering: R) => T },
+): T;
+
+export function useWorkflow<P extends AllowedProp, S, O, R>(
+  workflow: Workflow<P, S, O, R>,
+  props: P,
+  onOutput?: (output: O) => void,
+  options?: UseWorkflowHookOptions<O> & { select?: (rendering: R) => unknown },
+): unknown {
+  const select = options?.select;
+  const compare = options?.compare ?? Object.is;
   const lastRenderingRef = useRef<R | null>(null);
+  const lastSelectedSnapshotRef = useRef<unknown>(empty);
+  const lastSelectedNotifyRef = useRef<unknown>(empty);
   const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
-  const storeRuntimeState = useCallback((runtimeToStore: WorkflowRuntime<P, S, O, R>) => {
-    lastRenderingRef.current = runtimeToStore.getRendering();
-  }, []);
+  const storeRuntimeState = useCallback(
+    (runtimeToStore: WorkflowRuntime<P, S, O, R>) => {
+      const rendering = runtimeToStore.getRendering();
+      lastRenderingRef.current = rendering;
+      if (select !== undefined) {
+        lastSelectedNotifyRef.current = select(rendering);
+      }
+    },
+    [select],
+  );
   const { runtime, shouldBeActive } = useManagedWorkflowRuntime({
     workflow,
     props,
@@ -72,32 +102,60 @@ export function useWorkflow<P extends AllowedProp, S, O, R>(
       if (!shouldBeActive || runtime === null || runtime.isDisposed()) {
         return () => undefined;
       }
-      return runtime.subscribe(listener);
+      if (select === undefined) {
+        return runtime.subscribe(listener);
+      }
+      // Selector path: only notify when selected value changes
+      const currentRendering = runtime.getRendering();
+      lastSelectedNotifyRef.current = select(currentRendering);
+      return runtime.subscribe((rendering) => {
+        const selected = select(rendering);
+        if (!compare(selected, lastSelectedNotifyRef.current)) {
+          lastSelectedNotifyRef.current = selected;
+          listener();
+        }
+      });
     },
-    [runtime, shouldBeActive],
+    [runtime, shouldBeActive, select, compare],
   );
   const getRenderingSnapshot = useCallback(() => {
-    if (shouldBeActive) {
-      if (runtime === null || runtime.isDisposed()) {
-        throw new Error('Workflow runtime is not available');
+    const getFullRendering = (): R => {
+      if (shouldBeActive) {
+        if (runtime === null || runtime.isDisposed()) {
+          throw new Error('Workflow runtime is not available');
+        }
+        const rendering = runtime.getRendering();
+        lastRenderingRef.current = rendering;
+        return rendering;
       }
-      const rendering = runtime.getRendering();
-      lastRenderingRef.current = rendering;
-      return rendering;
-    }
 
-    if (runtime !== null && !runtime.isDisposed()) {
-      const rendering = runtime.getRendering();
-      lastRenderingRef.current = rendering;
-      return rendering;
-    }
+      if (runtime !== null && !runtime.isDisposed()) {
+        const rendering = runtime.getRendering();
+        lastRenderingRef.current = rendering;
+        return rendering;
+      }
 
-    if (lastRenderingRef.current !== null) {
-      return lastRenderingRef.current;
-    }
+      if (lastRenderingRef.current !== null) {
+        return lastRenderingRef.current;
+      }
 
-    throw new Error('Workflow rendering is not available while inactive');
-  }, [runtime, shouldBeActive]);
+      throw new Error('Workflow rendering is not available while inactive');
+    };
+
+    const rendering = getFullRendering();
+    if (select !== undefined) {
+      const selected = select(rendering);
+      if (
+        lastSelectedSnapshotRef.current !== empty &&
+        compare(selected, lastSelectedSnapshotRef.current)
+      ) {
+        return lastSelectedSnapshotRef.current;
+      }
+      lastSelectedSnapshotRef.current = selected;
+      return selected;
+    }
+    return rendering;
+  }, [runtime, shouldBeActive, select, compare]);
 
   // Subscribe to rendering changes
   return useSyncExternalStore(subscribe, getRenderingSnapshot, getRenderingSnapshot);

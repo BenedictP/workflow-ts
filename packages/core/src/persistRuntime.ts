@@ -157,7 +157,7 @@ const createErrorReporter = (
 };
 
 const createHydrateAction = <S, O>(state: S): Action<S, O> => {
-  return named(HYDRATE_ACTION_NAME, (_prevState: S) => ({ state }));
+  return named(HYDRATE_ACTION_NAME, (_: S) => ({ state }));
 };
 
 const createPersistInterceptor = <S, O>(
@@ -394,11 +394,8 @@ const createPersistRuntimeInternals = <P, S, O, R>(
     pendingSnapshot = snapshot;
 
     if (debounceMs === 0) {
-      const nextSnapshot = pendingSnapshot;
       pendingSnapshot = undefined;
-      if (nextSnapshot !== undefined) {
-        enqueuePersist(nextSnapshot);
-      }
+      enqueuePersist(snapshot);
       return;
     }
 
@@ -628,13 +625,13 @@ export function createPersistedRuntime<P, S, O, R>(
   return internals.runtime;
 }
 
-const createBlockingRuntime = async <P, S, O, R>(
+const createBlockingRuntime = <P, S, O, R>(
   workflow: Workflow<P, S, O, R>,
   props: P,
   config: PersistConfig<P, S, O, R>,
   reportError: (error: unknown, context: PersistErrorContext) => void,
   storedValue: string,
-): Promise<WorkflowRuntime<P, S, O, R>> => {
+): WorkflowRuntime<P, S, O, R> => {
   const asyncStorage = toAsyncStorage(config.storage);
   const deserializeState = config.deserialize;
 

@@ -57,7 +57,7 @@ const rendering = useWorkflow(workflow, props);
 
 - Re-renders when workflow rendering changes.
 - `props` are constrained by the `AllowedProp` TypeScript contract: primitives/functions/arrays/plain objects and `Date`/`Map`/`Set`/`ArrayBuffer`/typed-array views.
-- In development environments (React Native `__DEV__`, `NODE_ENV !== 'production'`, or bundler dev flags), unsupported values (class instances, `URL`, `Error`, `RegExp`, `Promise`, `WeakMap`, `WeakSet`, etc.) throw `TypeError`.
+- In development environments (React Native `__DEV__` or `NODE_ENV !== 'production'`), unsupported values (class instances, `URL`, `Error`, `RegExp`, `Promise`, `WeakMap`, `WeakSet`, etc.) throw `TypeError`.
 - Optional `options.resetOnWorkflowChange` recreates the runtime when workflow identity changes.
 - Works with React StrictMode development replays.
 - Runtime disposal remains strict in core: disposed runtimes still throw when used.

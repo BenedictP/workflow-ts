@@ -43,9 +43,9 @@ interface PropsSnapshot {
 export interface PropsValidationEnvironment {
   readonly reactNativeDev: unknown;
   readonly nodeEnv: unknown;
-  readonly viteDev: unknown;
-  readonly viteProd: unknown;
-  readonly viteMode: unknown;
+  readonly viteDev?: unknown;
+  readonly viteProd?: unknown;
+  readonly viteMode?: unknown;
 }
 
 export type OutputHandlers<O> = {
@@ -72,20 +72,10 @@ export const resolveShouldValidateProps = (env: PropsValidationEnvironment): boo
 };
 
 const shouldValidateProps = (): boolean => {
-  const importMeta = import.meta as ImportMeta & {
-    readonly env?: {
-      readonly DEV?: unknown;
-      readonly PROD?: unknown;
-      readonly MODE?: unknown;
-    };
-  };
   // Prefer explicit runtime signals and default to false when environment is unknown.
   return resolveShouldValidateProps({
     reactNativeDev: (globalThis as { readonly __DEV__?: unknown }).__DEV__,
     nodeEnv: typeof process === 'undefined' ? undefined : process.env['NODE_ENV'],
-    viteDev: importMeta.env?.DEV,
-    viteProd: importMeta.env?.PROD,
-    viteMode: importMeta.env?.MODE,
   });
 };
 

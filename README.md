@@ -428,7 +428,7 @@ pnpm install
 pnpm test
 pnpm build
 pnpm typecheck
-pnpm ci
+pnpm run ci
 ```
 
 ## Acknowledgments

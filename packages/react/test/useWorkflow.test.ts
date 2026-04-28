@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { createWorker, WorkflowRuntime, type Workflow } from '@workflow-ts/core';
-import { StrictMode } from 'react';
+import { StrictMode, useCallback } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AllowedProp } from '../src/useWorkflow';
@@ -190,6 +190,36 @@ const workerPolicyWorkflow: Workflow<void, WorkerPolicyState, never, WorkerPolic
     }
     return { value: state.value };
   },
+};
+
+// ============================================================
+// Selector Test Types
+// ============================================================
+
+interface SelectorState {
+  readonly count: number;
+  readonly name: string;
+}
+
+interface SelectorRendering {
+  readonly count: number;
+  readonly name: string;
+  readonly onIncrement: () => void;
+  readonly onRename: () => void;
+}
+
+const selectorWorkflow: Workflow<void, SelectorState, never, SelectorRendering> = {
+  initialState: () => ({ count: 0, name: 'initial' }),
+  render: (_props, state, ctx): SelectorRendering => ({
+    count: state.count,
+    name: state.name,
+    onIncrement: () => {
+      ctx.actionSink.send((s) => ({ state: { ...s, count: s.count + 1 } }));
+    },
+    onRename: () => {
+      ctx.actionSink.send((s) => ({ state: { ...s, name: 'updated' } }));
+    },
+  }),
 };
 
 // ============================================================
@@ -1279,6 +1309,115 @@ describe('useWorkflow', () => {
     });
 
     expect(result.current.value).toBe(1);
+
+    unmount();
+  });
+
+  it('should return selected value', () => {
+    const { result, unmount } = renderHook(() =>
+      useWorkflow(selectorWorkflow, undefined, undefined, { select: (r) => r.count }),
+    );
+
+    expect(result.current).toBe(0);
+
+    unmount();
+  });
+
+  it('should not re-render when unselected value changes', () => {
+    const actionsRef = { current: { onIncrement: () => {}, onRename: () => {} } };
+
+    let renderCount = 0;
+    const { result, unmount } = renderHook(() => {
+      renderCount++;
+      return useWorkflow(selectorWorkflow, undefined, undefined, {
+        select: useCallback((r: SelectorRendering) => {
+          actionsRef.current = { onIncrement: r.onIncrement, onRename: r.onRename };
+          return r.count;
+        }, []),
+      });
+    });
+
+    expect(result.current).toBe(0);
+    expect(renderCount).toBe(1);
+
+    act(() => {
+      actionsRef.current.onRename();
+    });
+
+    expect(renderCount).toBe(1);
+    expect(result.current).toBe(0);
+
+    unmount();
+  });
+
+  it('should re-render when selected value changes', () => {
+    const actionsRef = { current: { onIncrement: () => {}, onRename: () => {} } };
+
+    let renderCount = 0;
+    const { result, unmount } = renderHook(() => {
+      renderCount++;
+      return useWorkflow(selectorWorkflow, undefined, undefined, {
+        select: useCallback((r: SelectorRendering) => {
+          actionsRef.current = { onIncrement: r.onIncrement, onRename: r.onRename };
+          return r.count;
+        }, []),
+      });
+    });
+
+    expect(result.current).toBe(0);
+    expect(renderCount).toBe(1);
+
+    act(() => {
+      actionsRef.current.onIncrement();
+    });
+
+    expect(renderCount).toBe(2);
+    expect(result.current).toBe(1);
+
+    act(() => {
+      actionsRef.current.onIncrement();
+    });
+
+    expect(renderCount).toBe(3);
+    expect(result.current).toBe(2);
+
+    unmount();
+  });
+
+  it('should support custom comparator', () => {
+    const actionsRef = { current: { onIncrement: () => {}, onRename: () => {} } };
+
+    let renderCount = 0;
+    const { result, unmount } = renderHook(() => {
+      renderCount++;
+      return useWorkflow(selectorWorkflow, undefined, undefined, {
+        select: useCallback((r: SelectorRendering) => {
+          actionsRef.current = { onIncrement: r.onIncrement, onRename: r.onRename };
+          return { count: r.count };
+        }, []),
+        compare: (a, b) =>
+          (a as { count: number }).count === (b as { count: number }).count,
+      });
+    });
+
+    expect(result.current).toEqual({ count: 0 });
+    expect(renderCount).toBe(1);
+
+    // Rename doesn't change count — comparator should treat as equal
+    act(() => {
+      actionsRef.current.onRename();
+    });
+
+    expect(renderCount).toBe(1);
+    expect(result.current).toEqual({ count: 0 });
+
+    // Increment changes count — should re-render
+    act(() => {
+      actionsRef.current.onIncrement();
+    });
+
+    expect(renderCount).toBe(2);
+    expect(result.current).toEqual({ count: 1 });
 
     unmount();
   });

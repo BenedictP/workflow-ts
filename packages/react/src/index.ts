@@ -7,6 +7,7 @@ export type {
   AllowedProp,
   AllowedPropPrimitive,
   AllowedTypedArray,
+  UseWorkflowHookOptions,
   UseWorkflowOptions,
   UseWorkflowResult,
 } from './useWorkflow';

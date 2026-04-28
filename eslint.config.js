@@ -72,7 +72,13 @@ const tsConfig = {
     '@typescript-eslint/no-confusing-void-expression': 'warn',
     '@typescript-eslint/no-empty-function': 'warn',
     '@typescript-eslint/require-await': 'warn',
-    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+      },
+    ],
 
     // Import rules
     'import/order': [

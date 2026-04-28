@@ -666,9 +666,6 @@ export const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
       // StrictMode effect replay cleanup schedules disposal. Setup for the same runtime
       // immediately cancels that pending disposal.
       cancelPendingDispose(runtime);
-      if (!runtime.isDisposed()) {
-        runtime.startEffects();
-      }
     } else {
       if (!runtime.isDisposed()) {
         runtime.stopEffects();

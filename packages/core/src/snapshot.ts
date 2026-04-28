@@ -25,7 +25,7 @@ export class SnapshotParseError extends Error {
         target: object,
         // Error.captureStackTrace accepts any constructor function to trim from.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        constructorOpt?: abstract new (...args: any[]) => unknown,
+        constructorOpt?: new (...args: any[]) => unknown,
       ) => void;
     };
     if (typeof errorConstructor.captureStackTrace === 'function') {

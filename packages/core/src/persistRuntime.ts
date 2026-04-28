@@ -582,6 +582,7 @@ export function createPersistedRuntime<P, S, O, R>(
             });
           })
           .finally(() => {
+            lazyEffectsAttached = false;
             lazyReadCompletion = undefined;
           });
         return lazyReadCompletion;
@@ -598,6 +599,7 @@ export function createPersistedRuntime<P, S, O, R>(
     return undefined;
   };
 
+  let lazyEffectsAttached = false;
   if (config.effectMode === 'manual') {
     const originalStartEffects = internals.runtime.startEffects.bind(internals.runtime);
     const startEffectsAfterLazyRehydrate = (): void => {
@@ -613,6 +615,10 @@ export function createPersistedRuntime<P, S, O, R>(
         startEffectsAfterLazyRehydrate();
         return;
       }
+      if (lazyEffectsAttached) {
+        return;
+      }
+      lazyEffectsAttached = true;
       void readCompletion.finally(startEffectsAfterLazyRehydrate);
     };
   } else {
@@ -737,11 +743,13 @@ export async function createPersistedRuntimeAsync<P, S, O, R>(
         });
       })
       .finally(() => {
+        lazyEffectsAttached = false;
         lazyReadCompletion = undefined;
       });
     return lazyReadCompletion;
   };
 
+  let lazyEffectsAttached = false;
   if (config.effectMode === 'manual') {
     const originalStartEffects = internals.runtime.startEffects.bind(internals.runtime);
     const startEffectsAfterLazyRehydrate = (): void => {
@@ -757,6 +765,10 @@ export async function createPersistedRuntimeAsync<P, S, O, R>(
         startEffectsAfterLazyRehydrate();
         return;
       }
+      if (lazyEffectsAttached) {
+        return;
+      }
+      lazyEffectsAttached = true;
       void readCompletion.finally(startEffectsAfterLazyRehydrate);
     };
   } else {

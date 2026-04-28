@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistence error context now reports invalid envelope payloads as `operation: 'decodeEnvelope'` (instead of `deserialize`) so consumers can distinguish envelope corruption from user codec failures.
 - `createPersistedRuntimeAsync(..., { rehydrate: 'lazy' })` now reports synchronous storage read errors via `onError` instead of rejecting runtime creation.
 - Persisted runtimes now flush the latest pending snapshot on `dispose()` (including debounced writes) to avoid dropping the final transition state.
+- Lazy persisted runtimes now skip late rehydration when local state has already changed, preserving live user updates.
+- React-managed runtimes now start render-declared effects only after each commit, including newly declared workers on rerenders, via the new manual runtime effect lifecycle.
 - `usePersistedWorkflow` now warns once in development when `persist.serialize`/`persist.deserialize`/`persist.migrate` function identities change after mount.
+- `usePersistedWorkflow` development-warning detection now uses explicit environment signals (`__DEV__`, `NODE_ENV`, `import.meta.env`) and defaults to non-warning mode when unknown.
 - `usePersistedWorkflow` now throws a clear configuration error when `persist.key` resolves to a non-string value at runtime.
 - React persisted runtime identity no longer resets state when storage adapter references churn (for example inline `memoryStorage()` usage).
 - React persisted-hook server fallback detection now aligns with core environment rules so React Native/test-like environments are not misclassified as server-only.

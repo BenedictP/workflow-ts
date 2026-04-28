@@ -24,6 +24,11 @@ export type DebugLogger = (level: LogLevel, message: string, data?: unknown) => 
 export type PropsComparator<P> = (prev: P, next: P) => boolean;
 
 /**
+ * Controls when side effects declared during render are allowed to run.
+ */
+export type RuntimeEffectMode = 'auto' | 'manual';
+
+/**
  * Default debug logger that uses console
  */
 const defaultLogger: DebugLogger = (level, message, data) => {
@@ -113,6 +118,8 @@ export interface RuntimeConfig<P, S, O, R> {
   readonly devTools?: DevTools<S, O, R> | undefined;
   /** Optional props comparator. Defaults to Object.is */
   readonly propsEqual?: PropsComparator<P> | undefined;
+  /** Controls whether render-declared effects start automatically. Defaults to auto. */
+  readonly effectMode?: RuntimeEffectMode | undefined;
 }
 
 /**
@@ -131,11 +138,12 @@ export class WorkflowRuntime<P, S, O, R> {
   private lastRenderedProps: P;
   private hasPendingPropsChange = false;
   private readonly listeners = new Set<(rendering: R) => void>();
-  private readonly workerManager = new WorkerManager();
+  private readonly workerManager: WorkerManager;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly childRuntimes = new Map<string, WorkflowRuntime<any, any, any, any>>();
   /** Keys of children that were used in the current render cycle */
   private readonly touchedChildren = new Set<string>();
+  private readonly pendingChildEffectKeys = new Set<string>();
   private disposed = false;
   private isRendering = false;
   private isProcessingActions = false;
@@ -150,6 +158,8 @@ export class WorkflowRuntime<P, S, O, R> {
   private readonly debug: DebugLogger | null;
   private readonly devTools: RuntimeDevTools<S, O, R> | null;
   private readonly propsEqual: PropsComparator<P>;
+  private readonly effectMode: RuntimeEffectMode;
+  private effectsStarted: boolean;
   private readonly workflowKey: string;
   private readonly workerExecutionAllowed: boolean;
   private readonly shouldWarnOnBlockedWorkers: boolean;
@@ -174,6 +184,9 @@ export class WorkflowRuntime<P, S, O, R> {
     this.currentProps = config.props;
     this.lastRenderedProps = config.props;
     this.propsEqual = config.propsEqual ?? Object.is;
+    this.effectMode = config.effectMode ?? 'auto';
+    this.effectsStarted = this.effectMode === 'auto';
+    this.workerManager = new WorkerManager(this.effectsStarted, this.effectMode === 'manual');
     this.workflowKey = this.createRuntimeKey(config.workflow);
     this.workerExecutionAllowed = isWorkerAllowedByEnvironment();
     this.shouldWarnOnBlockedWorkers = isDevelopmentEnvironment();
@@ -275,10 +288,57 @@ export class WorkflowRuntime<P, S, O, R> {
     });
     this.childRuntimes.clear();
     this.touchedChildren.clear();
+    this.pendingChildEffectKeys.clear();
     this.cachedRendering = null;
     this.actionQueue.length = 0;
     this.typedOutputHandlers.clear();
     this.blockedWorkerWarningKeys.clear();
+  }
+
+  /**
+   * Start side effects declared by the latest render.
+   * This is useful for React integrations that need render to stay side-effect free
+   * until a component commits.
+   */
+  public startEffects(): void {
+    this.assertNotDisposed();
+    const shouldStartAllChildren = !this.effectsStarted;
+    if (
+      !shouldStartAllChildren &&
+      !this.workerManager.hasPendingEffects() &&
+      this.pendingChildEffectKeys.size === 0
+    ) {
+      return;
+    }
+
+    this.effectsStarted = true;
+    this.workerManager.startEffects();
+
+    if (shouldStartAllChildren) {
+      this.childRuntimes.forEach((child) => {
+        child.startEffects();
+      });
+      this.pendingChildEffectKeys.clear();
+      return;
+    }
+
+    const pendingChildKeys = Array.from(this.pendingChildEffectKeys);
+    this.pendingChildEffectKeys.clear();
+    pendingChildKeys.forEach((childKey) => {
+      this.childRuntimes.get(childKey)?.startEffects();
+    });
+  }
+
+  /**
+   * Stop active side effects while keeping the runtime and latest rendering usable.
+   */
+  public stopEffects(): void {
+    if (this.disposed || !this.effectsStarted) return;
+    this.effectsStarted = false;
+    this.workerManager.stopEffects();
+    this.childRuntimes.forEach((child) => {
+      child.stopEffects();
+    });
   }
 
   /**
@@ -394,6 +454,7 @@ export class WorkflowRuntime<P, S, O, R> {
       }
       keysToDelete.forEach((key) => {
         this.childRuntimes.delete(key);
+        this.pendingChildEffectKeys.delete(key);
       });
       this.touchedChildren.clear();
     }
@@ -664,12 +725,16 @@ export class WorkflowRuntime<P, S, O, R> {
       child = new WorkflowRuntime<CP, CS, CO, CR>({
         workflow,
         props,
+        effectMode: this.effectMode,
         onOutput: (output: CO) => {
           this.debug?.('log', 'Child output', { childKey, output });
           this.getOutputHandler(childKey)?.(output);
         },
       });
       this.childRuntimes.set(childKey, child);
+      if (this.effectsStarted) {
+        child.startEffects();
+      }
     } else {
       // Update props if child already exists - this allows child to react to prop changes
       child.updateProps(props);
@@ -683,7 +748,19 @@ export class WorkflowRuntime<P, S, O, R> {
       );
     }
 
-    return child.getRendering();
+    const childRendering = child.getRendering();
+    if (this.effectMode === 'manual' && child.hasPendingEffects()) {
+      this.pendingChildEffectKeys.add(childKey);
+    }
+    return childRendering;
+  }
+
+  private hasPendingEffects(): boolean {
+    return (
+      !this.effectsStarted ||
+      this.workerManager.hasPendingEffects() ||
+      this.pendingChildEffectKeys.size > 0
+    );
   }
 
   private runWorker<W>(worker: Worker<W>, key: string, handler: (output: W) => Action<S, O>): void {
@@ -719,7 +796,7 @@ export class WorkflowRuntime<P, S, O, R> {
     this.blockedWorkerWarningKeys.add(key);
     console.warn(
       `[workflow-ts] runWorker("${key}") was blocked in this environment. ` +
-      `Workers run automatically only in browser-like, React Native, and test runtimes.`,
+        `Workers run automatically only in browser-like, React Native, and test runtimes.`,
     );
   }
 

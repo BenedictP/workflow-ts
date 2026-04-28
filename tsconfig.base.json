@@ -5,7 +5,7 @@
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "ignoreDeprecations": "6.0",
-    
+
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -15,7 +15,7 @@
     "noImplicitThis": true,
     "useUnknownInCatchVariables": true,
     "alwaysStrict": true,
-    
+
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
@@ -25,15 +25,15 @@
     "noPropertyAccessFromIndexSignature": true,
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
-    
+
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    
+
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    
+
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   }

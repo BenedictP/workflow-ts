@@ -1,4 +1,9 @@
-import type { PersistErrorContext, PersistStorage, Workflow, WorkflowRuntime } from '@workflow-ts/core';
+import type {
+  PersistErrorContext,
+  PersistStorage,
+  Workflow,
+  WorkflowRuntime,
+} from '@workflow-ts/core';
 import { createPersistedRuntime, memoryStorage } from '@workflow-ts/core';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
@@ -53,7 +58,7 @@ const createPersistenceStore = (): PersistenceStore => {
   };
 };
 
-export interface ReactPersistConfig<P, S, _O, _R> {
+export interface ReactPersistConfig<P, S, _O = unknown, _R = unknown> {
   readonly storage: PersistStorage;
   readonly key: PersistKeyResolver<P>;
   readonly version: number;
@@ -64,6 +69,7 @@ export interface ReactPersistConfig<P, S, _O, _R> {
   readonly migrate?: (raw: string, fromVersion: number, toVersion: number) => string;
   readonly onPersist?: (snapshot: string) => void;
   readonly onRehydrate?: (snapshot: string) => void;
+  readonly onRehydrateSkipped?: (snapshot: string, reason: 'stateChanged') => void;
   readonly onError?: (error: unknown, context: PersistErrorContext) => void;
 }
 
@@ -71,11 +77,10 @@ export interface UsePersistedWorkflowOptions<
   P extends AllowedProp,
   S,
   O,
-  R,
 > extends WorkflowRuntimeOptions<O> {
   readonly props: P;
   readonly onOutput?: (output: O) => void;
-  readonly persist: ReactPersistConfig<P, S, O, R>;
+  readonly persist: ReactPersistConfig<P, S>;
 }
 
 export interface UsePersistedWorkflowResult<P extends AllowedProp, S, R> extends UseWorkflowResult<
@@ -141,7 +146,24 @@ const isDevelopmentEnvironment = (): boolean => {
     return nodeEnv !== 'production';
   }
 
-  return true;
+  const importMeta = import.meta as ImportMeta & {
+    readonly env?: {
+      readonly DEV?: unknown;
+      readonly PROD?: unknown;
+      readonly MODE?: unknown;
+    };
+  };
+  if (typeof importMeta.env?.DEV === 'boolean') {
+    return importMeta.env.DEV;
+  }
+  if (typeof importMeta.env?.PROD === 'boolean') {
+    return !importMeta.env.PROD;
+  }
+  if (typeof importMeta.env?.MODE === 'string') {
+    return importMeta.env.MODE !== 'production';
+  }
+
+  return false;
 };
 
 const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
@@ -165,7 +187,7 @@ const getSafeStorage = (
 
 export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   workflow: Workflow<P, S, O, R>,
-  options: UsePersistedWorkflowOptions<P, S, O, R>,
+  options: UsePersistedWorkflowOptions<P, S, O>,
 ): UsePersistedWorkflowResult<P, S, R> {
   const runtimeRef = useRef<WorkflowRuntime<P, S, O, R> | null>(null);
   const lastSnapshotRef = useRef<UseWorkflowResult<P, S, R> | null>(null);
@@ -181,9 +203,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
   const isCreatingRuntimeRef = useRef(false);
   const warnedCodecIdentityChangeRef = useRef(false);
   const previousCodecRef = useRef<{
-    readonly serialize: ReactPersistConfig<P, S, O, R>['serialize'];
-    readonly deserialize: ReactPersistConfig<P, S, O, R>['deserialize'];
-    readonly migrate: ReactPersistConfig<P, S, O, R>['migrate'];
+    readonly serialize: ReactPersistConfig<P, S>['serialize'];
+    readonly deserialize: ReactPersistConfig<P, S>['deserialize'];
+    readonly migrate: ReactPersistConfig<P, S>['migrate'];
   } | null>(null);
 
   const persist = options.persist;
@@ -193,6 +215,9 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
 
   const onRehydrateRef = useRef(persist.onRehydrate);
   onRehydrateRef.current = persist.onRehydrate;
+
+  const onRehydrateSkippedRef = useRef(persist.onRehydrateSkipped);
+  onRehydrateSkippedRef.current = persist.onRehydrateSkipped;
 
   const onErrorRef = useRef(persist.onError);
   onErrorRef.current = persist.onError;
@@ -289,7 +314,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           lastRehydratedAt: Date.now(),
         });
       };
-      const trackedStorage = {
+      const trackedStorage: PersistStorage = {
         getItem: (key: string): string | null | Promise<string | null> => {
           const value = effectiveStorage.getItem(key);
 
@@ -318,7 +343,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
         removeItem: (key: string): void | Promise<void> => {
           return effectiveStorage.removeItem(key);
         },
-      } as unknown as PersistStorage;
+      };
 
       isCreatingRuntimeRef.current = true;
       try {
@@ -328,6 +353,7 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
           version: persist.version,
           rehydrate: resolvedRehydrateMode,
           writeDebounceMs: persist.writeDebounceMs,
+          effectMode: 'manual',
           serialize: persist.serialize,
           deserialize: persist.deserialize,
           migrate: persist.migrate,
@@ -356,6 +382,20 @@ export function usePersistedWorkflow<P extends AllowedProp, S, O, R>(
               lastRehydratedAt: Date.now(),
             });
             onRehydrateRef.current?.(snapshot);
+          },
+          onRehydrateSkipped: (snapshot: string, reason: 'stateChanged') => {
+            if (!isCurrentRuntimeToken()) {
+              return;
+            }
+            const current = persistenceStore.getSnapshot();
+            publishPersistenceState({
+              ...current,
+              phase: 'ready',
+              error: undefined,
+              isHydrated: false,
+              lastRehydratedAt: Date.now(),
+            });
+            onRehydrateSkippedRef.current?.(snapshot, reason);
           },
           onError: (error: unknown, context: PersistErrorContext) => {
             if (!isCurrentRuntimeToken()) {

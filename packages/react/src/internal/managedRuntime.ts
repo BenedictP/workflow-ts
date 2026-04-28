@@ -652,6 +652,7 @@ export const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
     if (transitionedToInactive) {
       cancelPendingDispose(runtime);
       if (!runtime.isDisposed()) {
+        runtime.stopEffects();
         onStoreRuntimeStateRef.current?.(runtime);
         runtime.dispose();
       }
@@ -667,6 +668,7 @@ export const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
       cancelPendingDispose(runtime);
     } else {
       if (!runtime.isDisposed()) {
+        runtime.stopEffects();
         onStoreRuntimeStateRef.current?.(runtime);
       }
       scheduleDispose(runtime);
@@ -678,9 +680,13 @@ export const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
       if (options.runtimeRef.current !== runtime) {
         cancelPendingDispose(runtime);
         if (!runtime.isDisposed()) {
+          runtime.stopEffects();
           runtime.dispose();
         }
         return;
+      }
+      if (!runtime.isDisposed()) {
+        runtime.stopEffects();
       }
       scheduleDispose(runtime);
     };
@@ -694,6 +700,13 @@ export const useManagedWorkflowRuntime = <P extends AllowedProp, S, O, R>(
     if (propsSnapshot === null) return;
     lastSyncedPropsRef.current = propsSnapshot;
     runtime.updateProps(propsSnapshot.runtimeValue as P);
+  });
+
+  // Flush render-declared effects after every committed render. In manual runtime
+  // mode, workers declared during render are recorded but not started until here.
+  useEffect(() => {
+    if (runtime === null || runtime.isDisposed() || !shouldBeActive) return;
+    runtime.startEffects();
   });
 
   return {

@@ -10,7 +10,11 @@ export interface AsyncStorage {
   removeItem(key: string): Promise<void>;
 }
 
-export type PersistStorage = SyncStorage | AsyncStorage;
+export interface PersistStorage {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): void | Promise<void>;
+  removeItem(key: string): void | Promise<void>;
+}
 
 const createUnavailableStorage = (): Storage => {
   const unavailable = (): never => {

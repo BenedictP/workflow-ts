@@ -23,6 +23,16 @@ interface WorkerState<T = any> {
   onComplete: () => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface WorkerDeclaration<T = any> {
+  /** The worker function */
+  worker: Worker<T>;
+  /** Output handler */
+  onOutput: (output: T) => void;
+  /** Completion handler */
+  onComplete: () => void;
+}
+
 /**
  * Manages worker lifecycle (start/stop based on render calls).
  * Workers are started when called in render() and stopped when
@@ -30,14 +40,30 @@ interface WorkerState<T = any> {
  */
 export class WorkerManager {
   private readonly activeWorkers = new Map<string, WorkerState>();
+  private readonly declaredWorkers = new Map<string, WorkerDeclaration>();
+  private renderDeclaredWorkers: Map<string, WorkerDeclaration> | undefined;
+  private pendingDeclaredWorkers: Map<string, WorkerDeclaration> | undefined;
   /** Keys of workers that were touched in the current render cycle */
   private touchedKeys = new Set<string>();
   /** Whether we're currently in a render cycle */
   private inRenderCycle = false;
+  /** Whether declared workers should actively run. */
+  private effectsStarted: boolean;
+  /** Whether worker starts declared during render should wait for an explicit effects flush. */
+  private readonly deferRenderStarts: boolean;
+
+  public constructor(effectsStarted = true, deferRenderStarts = false) {
+    this.effectsStarted = effectsStarted;
+    this.deferRenderStarts = deferRenderStarts;
+  }
 
   /** Whether we're currently in a render cycle */
   public get isInRenderCycle(): boolean {
     return this.inRenderCycle;
+  }
+
+  public hasPendingEffects(): boolean {
+    return !this.effectsStarted || this.pendingDeclaredWorkers !== undefined;
   }
 
   /**
@@ -48,6 +74,9 @@ export class WorkerManager {
   public beginRenderCycle(): void {
     this.inRenderCycle = true;
     this.touchedKeys.clear();
+    if (this.deferRenderStarts) {
+      this.renderDeclaredWorkers = new Map();
+    }
   }
 
   /**
@@ -57,9 +86,17 @@ export class WorkerManager {
   public endRenderCycle(): void {
     this.inRenderCycle = false;
 
-    // Stop any workers that weren't touched in this render
-    for (const key of this.activeWorkers.keys()) {
+    if (this.deferRenderStarts) {
+      this.pendingDeclaredWorkers = this.renderDeclaredWorkers ?? new Map();
+      this.renderDeclaredWorkers = undefined;
+      this.touchedKeys.clear();
+      return;
+    }
+
+    // Stop any workers that weren't touched in this render.
+    for (const key of this.declaredWorkers.keys()) {
       if (!this.touchedKeys.has(key)) {
+        this.declaredWorkers.delete(key);
         this.stopWorker(key);
       }
     }
@@ -89,6 +126,57 @@ export class WorkerManager {
       this.touchedKeys.add(key);
     }
 
+    const declaration = { worker, onOutput, onComplete };
+
+    if (this.deferRenderStarts && this.inRenderCycle) {
+      this.renderDeclaredWorkers?.set(key, declaration);
+      return;
+    }
+
+    this.declaredWorkers.set(key, declaration);
+
+    if (!this.effectsStarted) {
+      return;
+    }
+
+    this.startDeclaredWorker(worker, key, onOutput, onComplete);
+  }
+
+  /**
+   * Start all currently declared workers.
+   */
+  public startEffects(): void {
+    if (!this.hasPendingEffects()) {
+      return;
+    }
+
+    this.effectsStarted = true;
+    this.reconcilePendingDeclarations();
+    this.declaredWorkers.forEach((declaration, key) => {
+      this.startDeclaredWorker(
+        declaration.worker,
+        key,
+        declaration.onOutput,
+        declaration.onComplete,
+      );
+    });
+  }
+
+  /**
+   * Stop active workers while preserving the latest render declarations.
+   */
+  public stopEffects(): void {
+    if (!this.effectsStarted) return;
+    this.effectsStarted = false;
+    this.stopActiveWorkers();
+  }
+
+  private startDeclaredWorker<T>(
+    worker: Worker<T>,
+    key: string,
+    onOutput: (output: T) => void,
+    onComplete: () => void,
+  ): void {
     // Already running - keep it alive, don't restart
     // (handler changes will be picked up on next render after worker completes)
     const existing = this.activeWorkers.get(key);
@@ -111,8 +199,22 @@ export class WorkerManager {
 
     this.activeWorkers.set(key, state);
 
-    worker
-      .run(controller.signal)
+    let result: Promise<T>;
+    try {
+      result = worker.run(controller.signal);
+    } catch (error) {
+      this.activeWorkers.delete(key);
+      state.status = 'completed';
+      console.error(`Worker ${key} error:`, error);
+      try {
+        state.onComplete();
+      } catch (completeError) {
+        console.error(`Worker ${key} onComplete error:`, completeError);
+      }
+      return;
+    }
+
+    result
       .then((output: T) => {
         if (state.status === 'running') {
           state.onOutput(output);
@@ -156,6 +258,33 @@ export class WorkerManager {
    * Stop all workers.
    */
   public stopAll(): void {
+    this.declaredWorkers.clear();
+    this.renderDeclaredWorkers = undefined;
+    this.pendingDeclaredWorkers = undefined;
+    this.stopActiveWorkers();
+  }
+
+  private reconcilePendingDeclarations(): void {
+    const pending = this.pendingDeclaredWorkers;
+    if (pending === undefined) {
+      return;
+    }
+
+    this.pendingDeclaredWorkers = undefined;
+
+    for (const key of this.declaredWorkers.keys()) {
+      if (!pending.has(key)) {
+        this.declaredWorkers.delete(key);
+        this.stopWorker(key);
+      }
+    }
+
+    pending.forEach((declaration, key) => {
+      this.declaredWorkers.set(key, declaration);
+    });
+  }
+
+  private stopActiveWorkers(): void {
     this.activeWorkers.forEach((state) => {
       state.status = 'stopped';
       state.controller.abort();
@@ -209,10 +338,7 @@ export class WorkerManager {
  * });
  * ```
  */
-export function createWorker<T>(
-  key: string,
-  run: (signal: AbortSignal) => Promise<T>,
-): Worker<T> {
+export function createWorker<T>(key: string, run: (signal: AbortSignal) => Promise<T>): Worker<T> {
   return {
     key,
     run,
@@ -227,7 +353,10 @@ export function createWorker<T>(
  * const loadData = fromPromise('load-data', () => api.getData());
  * ```
  */
-export function fromPromise<T>(key: string, factory: (signal?: AbortSignal) => Promise<T>): Worker<T> {
+export function fromPromise<T>(
+  key: string,
+  factory: (signal?: AbortSignal) => Promise<T>,
+): Worker<T> {
   return createWorker(key, async (signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
       throw new DOMException('Aborted', 'AbortError');

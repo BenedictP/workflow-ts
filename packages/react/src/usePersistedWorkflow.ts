@@ -58,7 +58,9 @@ const createPersistenceStore = (): PersistenceStore => {
   };
 };
 
-export interface ReactPersistConfig<P, S> {
+// Keep unused generic parameters for backwards-compatible public type arity.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface ReactPersistConfig<P, S, _O = unknown, _R = unknown> {
   readonly storage: PersistStorage;
   readonly key: PersistKeyResolver<P>;
   readonly version: number;

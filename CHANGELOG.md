@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-29
+
+### Added
+
+- `feat(react):` add selector support to `useWorkflow` for deriving reactive values from workflow state without triggering full re-renders (#141).
+
 ### Changed
 
 - **Breaking:** Reworked persistence in `@workflow-ts/core` to a strict codec model with versioned envelopes (`{ v, data }`): persisted runtimes now require explicit `serialize(state)` and `deserialize(raw, props)` in config, with optional `migrate(raw, fromVersion, toVersion)`.
@@ -61,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
-[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BenedictP/workflow-ts/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BenedictP/workflow-ts/compare/v0.1.1...v0.1.2

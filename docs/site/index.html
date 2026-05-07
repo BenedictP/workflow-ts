@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>workflow-ts — explicit state machines for TypeScript</title>
+    <meta
+      name="description"
+      content="A TypeScript implementation of Square's Workflow architecture. Explicit, testable, state-machine-driven application logic. React bindings in 9 kB gzip."
+    />
+    <meta property="og:title" content="workflow-ts" />
+    <meta
+      property="og:description"
+      content="Explicit state machines. Unidirectional action flow. UI-agnostic. 4.68 kB gzip core."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!-- Graph paper + noise overlays -->
+    <div class="paper" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <!-- Navigation -->
+    <header class="nav" role="banner">
+      <a class="nav__brand" href="#top" aria-label="workflow-ts, home">
+        <span class="nav__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25">
+            <rect x="2.5" y="2.5" width="19" height="19" rx="0.5" />
+            <path d="M2.5 8.5 H21.5 M2.5 15.5 H21.5 M8.5 2.5 V21.5 M15.5 2.5 V21.5" />
+            <circle cx="12" cy="12" r="2.25" fill="currentColor" />
+          </svg>
+        </span>
+        <span class="nav__wordmark">
+          <span class="nav__wordmark-main">workflow<span class="nav__slash">/</span>ts</span>
+          <span class="nav__wordmark-sub">v0.0.1 · MIT</span>
+        </span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#why">Why</a>
+        <a href="#code">Code</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#concepts">Concepts</a>
+        <a class="nav__cta" href="https://github.com/BenedictP/workflow-ts" target="_blank" rel="noopener">
+          <span>GitHub</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.25">
+            <path d="M3 9 L9 3 M4 3 H9 V8" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <!-- HERO ================================================================ -->
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <!-- Corner annotations -->
+        <span class="annot annot--tl" aria-hidden="true">
+          <span class="annot__line"></span>
+          <span class="annot__text">SHEET 01 / 04 · LANDING</span>
+        </span>
+        <span class="annot annot--tr" aria-hidden="true">
+          <span class="annot__text">SCALE 1:1 · DRAWN BY B.P.</span>
+          <span class="annot__line"></span>
+        </span>
+
+        <div class="hero__grid">
+          <!-- Left: headline, description, CTAs, badges -->
+          <div class="hero__copy">
+            <div class="eyebrow">
+              <span class="eyebrow__dot"></span>
+              <span>TypeScript · State Machines · UI-Agnostic Core</span>
+            </div>
+
+            <h1 id="hero-title" class="hero__title">
+              Your UI <em>has</em> states.
+              <br />
+              <span class="hero__title-alt">Start treating them <span class="hero__mark">that way</span>.</span>
+            </h1>
+
+            <p class="hero__lede">
+              <b>workflow-ts</b> is a TypeScript implementation of Square&apos;s
+              <a href="https://developer.squareup.com/blog/workflow-compose/" target="_blank" rel="noopener"
+                >Workflow architecture</a
+              >. Explicit states. Unidirectional actions. Render-scoped workers. A framework-agnostic core with
+              React bindings in a separate package.
+            </p>
+
+            <div class="cta">
+              <a class="btn btn--primary" href="#code">
+                <span class="btn__label">Read the contract</span>
+                <span class="btn__icon" aria-hidden="true">→</span>
+              </a>
+              <a
+                class="btn btn--ghost"
+                href="https://github.com/BenedictP/workflow-ts"
+                target="_blank"
+                rel="noopener"
+              >
+                <span class="btn__label">View on GitHub</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path
+                    d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+                  />
+                </svg>
+              </a>
+            </div>
+
+            <ul class="badges" aria-label="Key metrics">
+              <li class="badge">
+                <span class="badge__num">4.68</span>
+                <span class="badge__unit">kB gzip</span>
+                <span class="badge__label">@workflow-ts/core</span>
+              </li>
+              <li class="badge">
+                <span class="badge__num">9</span>
+                <span class="badge__unit">kB gzip</span>
+                <span class="badge__label">@workflow-ts/react</span>
+              </li>
+              <li class="badge">
+                <span class="badge__num">0</span>
+                <span class="badge__unit">runtime deps</span>
+                <span class="badge__label">core package</span>
+              </li>
+              <li class="badge">
+                <span class="badge__num">100<span class="badge__sup">%</span></span>
+                <span class="badge__unit">typed</span>
+                <span class="badge__label">strict mode</span>
+              </li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- Scroll hint -->
+        <div class="scroll-hint" aria-hidden="true">
+          <span class="scroll-hint__line"></span>
+          <span class="scroll-hint__text">↓ continue below</span>
+        </div>
+      </section>
+
+      <!-- WHY ================================================================= -->
+      <section id="why" class="why" aria-labelledby="why-title">
+        <div class="section-head">
+          <span class="section-head__num">§ 01</span>
+          <h2 id="why-title" class="section-head__title">Why a workflow?</h2>
+          <p class="section-head__lede">
+            Most UI code accretes flags: <code>isLoading</code>, <code>hasError</code>, <code>submittedOnce</code>,
+            <code>didRehydrate</code>. The machine becomes implicit and untestable. workflow-ts makes the states
+            explicit and the transitions the only way forward.
+          </p>
+        </div>
+
+        <ul class="cards">
+          <li class="card">
+            <span class="card__num">01</span>
+            <h3 class="card__title">Explicit state</h3>
+            <p class="card__body">
+              Each meaningful step is a tagged union variant. No more illegal combinations of booleans silently
+              lingering between renders.
+            </p>
+          </li>
+          <li class="card">
+            <span class="card__num">02</span>
+            <h3 class="card__title">Unidirectional</h3>
+            <p class="card__body">
+              Every change is an action &mdash; a pure reducer from state to next state, with an optional output
+              for the parent. There is one way data flows.
+            </p>
+          </li>
+          <li class="card">
+            <span class="card__num">03</span>
+            <h3 class="card__title">Composable</h3>
+            <p class="card__body">
+              Parent workflows render child workflows and map their outputs back into actions. State machines
+              nest the way components do &mdash; but with contracts.
+            </p>
+          </li>
+          <li class="card">
+            <span class="card__num">04</span>
+            <h3 class="card__title">UI-agnostic</h3>
+            <p class="card__body">
+              The core runtime has zero UI dependencies. React hooks live in a separate 9&thinsp;kB package.
+              Port to anything that can call a function.
+            </p>
+          </li>
+          <li class="card">
+            <span class="card__num">05</span>
+            <h3 class="card__title">Render-scoped workers</h3>
+            <p class="card__body">
+              Async work starts and stops with the rendering that requested it. No stale fetches, no leaked
+              timers. Cancellation is the default.
+            </p>
+          </li>
+          <li class="card">
+            <span class="card__num">06</span>
+            <h3 class="card__title">Testable without DOM</h3>
+            <p class="card__body">
+              Drive a runtime directly, assert renderings, inject fake workers. Tests read like the state
+              diagram they came from.
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <!-- CODE ============================================================== -->
+      <section id="code" class="code" aria-labelledby="code-title">
+        <div class="section-head">
+          <span class="section-head__num">§ 02</span>
+          <h2 id="code-title" class="section-head__title">The contract, in three files.</h2>
+          <p class="section-head__lede">
+            One workflow module. One React screen. One test. Same mental model everywhere.
+          </p>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Example code">
+          <button class="tab is-active" role="tab" aria-selected="true" data-tab="workflow">
+            <span class="tab__idx">01</span>
+            <span class="tab__name">workflow.ts</span>
+          </button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="react">
+            <span class="tab__idx">02</span>
+            <span class="tab__name">ProfileScreen.tsx</span>
+          </button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="test">
+            <span class="tab__idx">03</span>
+            <span class="tab__name">workflow.test.ts</span>
+          </button>
+        </div>
+
+        <div class="panels">
+          <article class="panel is-active" id="panel-workflow" role="tabpanel">
+            <header class="panel__bar">
+              <span class="panel__filename">workflow.ts</span>
+              <span class="panel__pkg">from @workflow-ts/core</span>
+            </header>
+            <pre class="panel__code"><code class="lang-ts">import { createWorker, type Worker, type Workflow } from '@workflow-ts/core';
+
+// Props: inputs from the hosting screen or parent workflow.
+export interface Props { userId: string }
+
+// State: every meaningful step the screen can be in, as a tagged union.
+// There are no illegal combinations; the machine is always in exactly one case.
+export type State =
+  | { type: 'loading' }
+  | { type: 'loaded'; name: string }
+  | { type: 'error'; message: string };
+
+// Output: events this workflow emits upward to its parent.
+export interface Output { type: 'closed' }
+
+// Rendering: the framework-agnostic view model. One shape per state.
+// The UI only ever sees one of these; callbacks are how it sends events back.
+export type Rendering =
+  | { type: 'loading'; close: () =&gt; void }
+  | { type: 'loaded'; name: string; reload: () =&gt; void; close: () =&gt; void }
+  | { type: 'error'; message: string; retry: () =&gt; void; close: () =&gt; void };
+
+export const profileWorkflow: Workflow&lt;Props, State, Output, Rendering&gt; = {
+  // Start in 'loading'. A snapshot can override this during rehydration.
+  initialState: () =&gt; ({ type: 'loading' }),
+
+  // render() runs on every state change. Pure function of (props, state).
+  // It returns a Rendering and may start render-scoped workers for async work.
+  render: (_props, state, ctx) =&gt; {
+    switch (state.type) {
+      case 'loading':
+        // Start the profile-load worker while this state is active.
+        // When the worker resolves, its result becomes the next state.
+        // If we leave 'loading' before it finishes, the worker is cancelled.
+        ctx.runWorker(loadProfileWorker, 'profile-load', (r) =&gt; () =&gt; ({
+          state: r.ok
+            ? { type: 'loaded', name: r.name }
+            : { type: 'error', message: r.message },
+        }));
+        return { type: 'loading', close: () =&gt; emitClosed(ctx) };
+
+      case 'loaded':
+        return {
+          type: 'loaded',
+          name: state.name,
+          // Reload sends an action that transitions back to 'loading',
+          // which (above) restarts the worker. No imperative fetch here.
+          reload: () =&gt; ctx.actionSink.send(() =&gt; ({ state: { type: 'loading' } })),
+          close:  () =&gt; emitClosed(ctx),
+        };
+
+      case 'error':
+        return {
+          type: 'error',
+          message: state.message,
+          // Retry is the same transition as reload: go back to 'loading'.
+          retry: () =&gt; ctx.actionSink.send(() =&gt; ({ state: { type: 'loading' } })),
+          close: () =&gt; emitClosed(ctx),
+        };
+    }
+  },
+};</code></pre>
+          </article>
+
+          <article class="panel" id="panel-react" role="tabpanel" hidden>
+            <header class="panel__bar">
+              <span class="panel__filename">ProfileScreen.tsx</span>
+              <span class="panel__pkg">from @workflow-ts/react</span>
+            </header>
+            <pre class="panel__code"><code class="lang-tsx">import { useWorkflow } from '@workflow-ts/react';
+import { profileWorkflow } from './workflow';
+
+export function ProfileScreen({ userId }: { userId: string }) {
+  const rendering = useWorkflow(profileWorkflow, { userId });
+
+  switch (rendering.type) {
+    case 'loading':
+      return (
+        &lt;section&gt;
+          &lt;h1&gt;Profile&lt;/h1&gt;
+          &lt;p&gt;Loading...&lt;/p&gt;
+          &lt;button onClick={rendering.close}&gt;Close&lt;/button&gt;
+        &lt;/section&gt;
+      );
+
+    case 'loaded':
+      return (
+        &lt;section&gt;
+          &lt;h1&gt;Welcome {rendering.name}&lt;/h1&gt;
+          &lt;button onClick={rendering.reload}&gt;Reload&lt;/button&gt;
+          &lt;button onClick={rendering.close}&gt;Close&lt;/button&gt;
+        &lt;/section&gt;
+      );
+
+    case 'error':
+      return (
+        &lt;section&gt;
+          &lt;h1&gt;Profile&lt;/h1&gt;
+          &lt;p&gt;{rendering.message}&lt;/p&gt;
+          &lt;button onClick={rendering.retry}&gt;Retry&lt;/button&gt;
+          &lt;button onClick={rendering.close}&gt;Close&lt;/button&gt;
+        &lt;/section&gt;
+      );
+  }
+}</code></pre>
+          </article>
+
+          <article class="panel" id="panel-test" role="tabpanel" hidden>
+            <header class="panel__bar">
+              <span class="panel__filename">workflow.test.ts</span>
+              <span class="panel__pkg">no DOM required</span>
+            </header>
+            <pre class="panel__code"><code class="lang-ts">import { createRuntime } from '@workflow-ts/core';
+import { expect, it } from 'vitest';
+import { profileWorkflow } from '../src/workflow';
+
+it('transitions loading → loaded', () =&gt; {
+  const runtime = createRuntime(profileWorkflow, { userId: 'u1' });
+
+  expect(runtime.getRendering().type).toBe('loading');
+  expect(runtime.getState().type).toBe('loading');
+
+  runtime.send(() =&gt; ({ state: { type: 'loaded', name: 'Ada' } }));
+
+  const loaded = runtime.getRendering();
+  expect(loaded.type).toBe('loaded');
+  expect((loaded as Extract&lt;typeof loaded, { type: 'loaded' }&gt;).name).toBe('Ada');
+
+  runtime.dispose();
+});</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <!-- ARCHITECTURE ======================================================= -->
+      <section id="architecture" class="arch" aria-labelledby="arch-title">
+        <div class="section-head">
+          <span class="section-head__num">§ 03</span>
+          <h2 id="arch-title" class="section-head__title">The runtime, drawn to scale.</h2>
+          <p class="section-head__lede">
+            Props enter. State is explicit. Render produces a framework-agnostic Rendering. Actions and Worker
+            results close the loop. Output bubbles up to the parent.
+          </p>
+        </div>
+
+        <figure class="arch__figure">
+          <img
+            class="arch__img"
+            src="./architecture.svg"
+            alt="workflow-ts runtime architecture: UI to Action to State to Workflow Definition to Rendering, with Worker as a dashed side-lane and Output bubbling out to the parent"
+          />
+          <figcaption class="arch__caption">
+            FIG.&nbsp;02 — Runtime data flow. UI → Action → State → Workflow → Rendering → UI. Workers run
+            beneath as a cancellable side-effect lane.
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- CONCEPTS =========================================================== -->
+      <section id="concepts" class="concepts" aria-labelledby="concepts-title">
+        <div class="section-head">
+          <span class="section-head__num">§ 04</span>
+          <h2 id="concepts-title" class="section-head__title">Six concepts. That's the whole library.</h2>
+        </div>
+
+        <ol class="glossary">
+          <li>
+            <span class="glossary__term">State</span>
+            <span class="glossary__defn">A tagged union of every meaningful step the screen can be in.</span>
+          </li>
+          <li>
+            <span class="glossary__term">Action</span>
+            <span class="glossary__defn">A pure reducer from state to next state, with optional output.</span>
+          </li>
+          <li>
+            <span class="glossary__term">Rendering</span>
+            <span class="glossary__defn">The framework-agnostic view model: data plus callbacks.</span>
+          </li>
+          <li>
+            <span class="glossary__term">Worker</span>
+            <span class="glossary__defn">Render-scoped async work with automatic cancellation.</span>
+          </li>
+          <li>
+            <span class="glossary__term">Composition</span>
+            <span class="glossary__defn">Parent workflows render children and map their outputs back.</span>
+          </li>
+          <li>
+            <span class="glossary__term">Snapshot</span>
+            <span class="glossary__defn">Serialize current state. Rehydrate through initialState later.</span>
+          </li>
+        </ol>
+      </section>
+
+      <!-- INSTALL & FURTHER READING ========================================= -->
+      <section class="install" aria-labelledby="install-title">
+        <div class="section-head">
+          <span class="section-head__num">§ 05</span>
+          <h2 id="install-title" class="section-head__title">Install &amp; get reading.</h2>
+        </div>
+
+        <div class="install__grid">
+          <div class="install__col">
+            <h3 class="install__h">Core</h3>
+            <pre class="install__cmd"><code>pnpm add @workflow-ts/core</code></pre>
+            <p class="install__note">Zero runtime dependencies. 4.68 kB gzip.</p>
+          </div>
+          <div class="install__col">
+            <h3 class="install__h">React bindings</h3>
+            <pre class="install__cmd"><code>pnpm add @workflow-ts/react</code></pre>
+            <p class="install__note">A single hook: <code>useWorkflow</code>. SSR-safe.</p>
+          </div>
+          <div class="install__col">
+            <h3 class="install__h">AI agent skill</h3>
+            <pre class="install__cmd"><code>npx skills add BenedictP/workflow-ts</code></pre>
+            <p class="install__note">Installable <code>$workflow-ts-architecture</code> skill.</p>
+          </div>
+        </div>
+
+        <ul class="reading">
+          <li>
+            <a
+              href="https://medium.com/@benedict.pregler/your-ui-has-states-start-treating-them-that-way-ade30be1e72e"
+              target="_blank"
+              rel="noopener"
+              >Your UI Has States — Start Treating Them That Way
+              <span class="reading__arr" aria-hidden="true">↗</span></a
+            >
+          </li>
+          <li>
+            <a
+              href="https://medium.com/@benedict.pregler/zustand-gives-you-freedom-workflow-ts-gives-you-guardrails-6d4634b724aa"
+              target="_blank"
+              rel="noopener"
+              >Zustand Gives You Freedom, workflow-ts Gives You Guardrails
+              <span class="reading__arr" aria-hidden="true">↗</span></a
+            >
+          </li>
+          <li>
+            <a
+              href="https://medium.com/@benedict.pregler/stop-writing-state-machine-config-start-writing-functions-50254e3daa39"
+              target="_blank"
+              rel="noopener"
+              >Stop Writing State Machine Config, Start Writing Functions
+              <span class="reading__arr" aria-hidden="true">↗</span></a
+            >
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <!-- FOOTER ============================================================== -->
+    <footer class="foot" role="contentinfo">
+      <div class="foot__inner">
+        <p class="foot__left">
+          <span class="foot__mark">w/ts</span>
+          <span>Licensed MIT. Inspired by Square's Workflow and Point-Free's TCA.</span>
+        </p>
+        <nav class="foot__links" aria-label="Repository links">
+          <a href="https://github.com/BenedictP/workflow-ts" target="_blank" rel="noopener">repo</a>
+          <a href="https://www.npmjs.com/package/@workflow-ts/core" target="_blank" rel="noopener">npm · core</a>
+          <a href="https://www.npmjs.com/package/@workflow-ts/react" target="_blank" rel="noopener">npm · react</a>
+          <a
+            href="https://github.com/BenedictP/workflow-ts/blob/main/docs/index.md"
+            target="_blank"
+            rel="noopener"
+            >docs</a
+          >
+        </nav>
+      </div>
+    </footer>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

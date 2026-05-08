@@ -1400,11 +1400,11 @@ kbd {
 
 .hero__title-alt {
   display: block;
-  margin-top: 0.18em;
+  margin-top: 0.32em;
   font-family: var(--display);
   font-weight: 500;
   font-size: 0.55em;
-  line-height: 1.1;
+  line-height: 1.4;
   color: var(--fg-muted);
   letter-spacing: -0.025em;
 }
@@ -1413,10 +1413,10 @@ kbd {
   background: rgba(245, 158, 11, 0.18);
   color: var(--fg);
   border-radius: 6px;
-  padding: 0 0.18em;
-  box-shadow:
-    0 0 0 1px var(--border-amber),
-    0 0 24px rgba(245, 158, 11, 0.2);
+  padding: 0.04em 0.22em;
+  box-shadow: inset 0 0 0 1px var(--border-amber);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .hero__lede {

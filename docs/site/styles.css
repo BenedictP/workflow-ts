@@ -2128,8 +2128,8 @@ section + section {
   width: 100%;
   height: auto;
   border-radius: 10px;
-  background: #f3ece0;
-  padding: clamp(12px, 2vw, 20px);
+  background: transparent;
+  padding: 0;
 }
 
 .arch__caption {

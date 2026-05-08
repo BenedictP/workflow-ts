@@ -14,48 +14,51 @@
 
   <defs>
     <style><![CDATA[
-      .block       { fill: #f3ece0; stroke: #141312; stroke-width: 1.5; }
-      .block-sig   { fill: #f9eee4; stroke: #d94325; stroke-width: 1.5; stroke-dasharray: 5 4; }
+      .bg          { fill: #0a0a0f; }
+      .block       { fill: #1a1a24; stroke: rgba(255,255,255,0.12); stroke-width: 1.5; }
+      .block-sig   { fill: rgba(245,158,11,0.06); stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 5 4; }
       .runtime-box {
-        fill: #ece4d3;
-        fill-opacity: 0.55;
-        stroke: #141312;
+        fill: rgba(255,255,255,0.02);
+        stroke: rgba(255,255,255,0.18);
         stroke-width: 1.5;
         stroke-dasharray: 6 4;
       }
 
       /* All block text uses dominant-baseline: middle for true vertical centering */
-      .t-title       { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #141312;
+      .t-title       { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #fafafa;
                        dominant-baseline: middle; text-anchor: middle; }
-      .t-title-sig   { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #d94325;
+      .t-title-sig   { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #f59e0b;
                        dominant-baseline: middle; text-anchor: middle; }
-      .t-sub         { font-size: 13px; letter-spacing: 0.02em; fill: #6b655c;
+      .t-sub         { font-size: 13px; letter-spacing: 0.02em; fill: #a1a1aa;
                        dominant-baseline: middle; text-anchor: middle; }
-      .t-edge        { font-size: 12px; letter-spacing: 0.16em; fill: #3a3732; text-transform: uppercase;
+      .t-edge        { font-size: 12px; letter-spacing: 0.16em; fill: #a1a1aa; text-transform: uppercase;
                        dominant-baseline: middle; text-anchor: middle; font-weight: 500; }
-      .t-edge-sig    { font-size: 12px; letter-spacing: 0.16em; fill: #d94325; text-transform: uppercase;
+      .t-edge-sig    { font-size: 12px; letter-spacing: 0.16em; fill: #f59e0b; text-transform: uppercase;
                        dominant-baseline: middle; text-anchor: middle; font-weight: 500; }
-      .t-edge-num    { fill: #d94325; }
-      .t-runtime     { font-size: 13px; letter-spacing: 0.24em; fill: #d94325; text-transform: uppercase;
+      .t-edge-num    { fill: #f59e0b; }
+      .t-runtime     { font-size: 13px; letter-spacing: 0.24em; fill: #f59e0b; text-transform: uppercase;
                        font-weight: 700; dominant-baseline: middle; }
-      .t-runtime-sub { font-size: 11px; letter-spacing: 0.06em; fill: #6b655c;
+      .t-runtime-sub { font-size: 11px; letter-spacing: 0.06em; fill: #71717a;
                        dominant-baseline: middle; }
-      .t-tag         { font-size: 12px; letter-spacing: 0.18em; fill: #6b655c;
+      .t-tag         { font-size: 12px; letter-spacing: 0.18em; fill: #71717a;
                        text-transform: uppercase; font-weight: 700; dominant-baseline: middle; }
 
-      .arrow     { fill: none; stroke: #141312; stroke-width: 1.5; }
-      .arrow-sig { fill: none; stroke: #d94325; stroke-width: 1.5; stroke-dasharray: 4 4; }
+      .arrow     { fill: none; stroke: rgba(255,255,255,0.45); stroke-width: 1.5; }
+      .arrow-sig { fill: none; stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 4 4; }
     ]]></style>
 
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#141312" />
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.6)" />
     </marker>
     <marker id="arr-sig" viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d94325" />
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
     </marker>
   </defs>
+
+  <!-- Dark canvas background -->
+  <rect class="bg" x="0" y="0" width="1200" height="560" />
 
   <!-- ============================================================
        Geometry

@@ -130,7 +130,7 @@
         continue;
       }
       // Punctuation / operators
-      if (/[{}()\[\];,.:<>?!|&=+\-*\/]/.test(c)) {
+      if (/[{}()[\];,.:<>?!|&=+\-*/]/.test(c)) {
         out += `<span class="tok-p">${escapeHtml(c)}</span>`;
         i++;
         continue;

@@ -198,16 +198,35 @@ main,
 }
 .nav__cta {
   border: 1px solid var(--ink);
-  padding: 8px 12px;
+  padding: 9px 14px;
   display: inline-flex;
   gap: 8px;
   align-items: center;
+  justify-content: center;
   background: var(--paper);
   color: var(--ink);
+  line-height: 1;
+  letter-spacing: 0; /* reset; letter-spacing lives on the inner span so the
+                        trailing tracking space stays inside the text, not the button */
 }
-.nav__cta:hover {
+.nav__cta > span {
+  letter-spacing: 0.16em;
+  padding-left: 0.16em; /* compensate the trailing letter-space on the last glyph */
+}
+.nav__cta svg {
+  flex: none;
+  display: block;
+  transition: transform 180ms ease;
+}
+.nav__links a.nav__cta:hover {
   background: var(--ink);
   color: var(--paper);
+}
+.nav__links a.nav__cta:hover svg {
+  transform: translate(2px, -2px);
+}
+.nav__cta::after {
+  content: none !important; /* cancel the inherited underline sweep from .nav__links a */
 }
 
 /* -----------------------------------------------------------

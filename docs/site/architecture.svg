@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1200 560"
+     role="img"
+     aria-labelledby="arch-title arch-desc"
+     font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace">
+  <title id="arch-title">workflow-ts runtime architecture</title>
+  <desc id="arch-desc">
+    UI sends events as Actions. The runtime applies each Action to produce the next State.
+    The Workflow Definition is a pure function of props and state, producing a Rendering.
+    The Rendering is consumed by the UI. Workers run as a cancellable side-lane: started and
+    stopped by the render pass, yielding results back as Actions.
+  </desc>
+
+  <defs>
+    <style><![CDATA[
+      .block       { fill: #f3ece0; stroke: #141312; stroke-width: 1.5; }
+      .block-sig   { fill: #f9eee4; stroke: #d94325; stroke-width: 1.5; stroke-dasharray: 5 4; }
+      .runtime-box {
+        fill: #ece4d3;
+        fill-opacity: 0.55;
+        stroke: #141312;
+        stroke-width: 1.5;
+        stroke-dasharray: 6 4;
+      }
+
+      /* All block text uses dominant-baseline: middle for true vertical centering */
+      .t-title       { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #141312;
+                       dominant-baseline: middle; text-anchor: middle; }
+      .t-title-sig   { font-size: 18px; font-weight: 700; letter-spacing: 0.24em; fill: #d94325;
+                       dominant-baseline: middle; text-anchor: middle; }
+      .t-sub         { font-size: 13px; letter-spacing: 0.02em; fill: #6b655c;
+                       dominant-baseline: middle; text-anchor: middle; }
+      .t-edge        { font-size: 12px; letter-spacing: 0.16em; fill: #3a3732; text-transform: uppercase;
+                       dominant-baseline: middle; text-anchor: middle; font-weight: 500; }
+      .t-edge-sig    { font-size: 12px; letter-spacing: 0.16em; fill: #d94325; text-transform: uppercase;
+                       dominant-baseline: middle; text-anchor: middle; font-weight: 500; }
+      .t-edge-num    { fill: #d94325; }
+      .t-runtime     { font-size: 13px; letter-spacing: 0.24em; fill: #d94325; text-transform: uppercase;
+                       font-weight: 700; dominant-baseline: middle; }
+      .t-runtime-sub { font-size: 11px; letter-spacing: 0.06em; fill: #6b655c;
+                       dominant-baseline: middle; }
+      .t-tag         { font-size: 12px; letter-spacing: 0.18em; fill: #6b655c;
+                       text-transform: uppercase; font-weight: 700; dominant-baseline: middle; }
+
+      .arrow     { fill: none; stroke: #141312; stroke-width: 1.5; }
+      .arrow-sig { fill: none; stroke: #d94325; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    ]]></style>
+
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#141312" />
+    </marker>
+    <marker id="arr-sig" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d94325" />
+    </marker>
+  </defs>
+
+  <!-- ============================================================
+       Geometry
+
+       Runtime container: y 200..540 (h 340)
+       Runtime header band (for label "RUNTIME"):  y 210..250
+       Top box row:        y 280..390 (h 110, centers at y 335)
+       Label band below:   y 400..430 (clean gap before worker)
+       Worker block:       y 440..530 (h 90, center y 485)
+
+       Boxes (x ranges, horizontal gap 30px between each):
+         ACTION                100 .. 260   (w 160)
+         STATE                 290 .. 460   (w 170)
+         WORKFLOW DEFINITION   490 .. 810   (w 320)
+         RENDERING             840 ..1020   (w 180)
+       ============================================================ -->
+
+  <!-- Runtime container. Label anchored in the bottom-left corner, clear of all arrows. -->
+  <rect class="runtime-box" x="60" y="200" width="1080" height="340" rx="6" />
+  <text x="84" y="512" class="t-runtime">RUNTIME</text>
+  <text x="84" y="528" class="t-runtime-sub">@workflow-ts/core · pure functions + sinks</text>
+
+  <!-- UI block (centered above the runtime). Box y 40..130, center y 85. -->
+  <g>
+    <rect class="block" x="500" y="40" width="200" height="90" rx="3" />
+    <text x="600" y="73" class="t-title">UI</text>
+    <text x="600" y="100" class="t-sub">react / any framework</text>
+  </g>
+
+  <!--
+    Top row is centered inside the runtime (x=60..1140, width 1080).
+    Content span 140..1060 with 80px margins on either side.
+      ACTION              140 .. 300   (w=160, center 220)
+      STATE               330 .. 500   (w=170, center 415)
+      WORKFLOW DEFINITION 530 .. 850   (w=320, center 690)
+      RENDERING           880 ..1060   (w=180, center 970)
+  -->
+
+  <!-- ACTION -->
+  <g>
+    <rect class="block" x="140" y="280" width="160" height="110" rx="3" />
+    <text x="220" y="315" class="t-title">ACTION</text>
+    <text x="220" y="347" class="t-sub">pure reducer</text>
+    <text x="220" y="367" class="t-sub">state → next</text>
+  </g>
+
+  <!-- STATE -->
+  <g>
+    <rect class="block" x="330" y="280" width="170" height="110" rx="3" />
+    <text x="415" y="315" class="t-title">STATE</text>
+    <text x="415" y="347" class="t-sub">internal,</text>
+    <text x="415" y="367" class="t-sub">immutable</text>
+  </g>
+
+  <!-- WORKFLOW DEFINITION -->
+  <g>
+    <rect class="block" x="530" y="280" width="320" height="110" rx="3" />
+    <text x="690" y="315" class="t-title">WORKFLOW DEFINITION</text>
+    <text x="690" y="347" class="t-sub">pure function:</text>
+    <text x="690" y="367" class="t-sub">(props, state) → rendering</text>
+  </g>
+
+  <!-- RENDERING -->
+  <g>
+    <rect class="block" x="880" y="280" width="180" height="110" rx="3" />
+    <text x="970" y="315" class="t-title">RENDERING</text>
+    <text x="970" y="347" class="t-sub">view model:</text>
+    <text x="970" y="367" class="t-sub">data + callbacks</text>
+  </g>
+
+  <!-- WORKER: box center (600, 485) -->
+  <g>
+    <rect class="block-sig" x="440" y="440" width="320" height="90" rx="3" />
+    <text x="600" y="468" class="t-title-sig">WORKER</text>
+    <text x="600" y="495" class="t-sub">async · cancellable · render-scoped</text>
+    <text x="600" y="515" class="t-sub">started / stopped by the render pass</text>
+  </g>
+
+  <!-- ============================================================
+       Arrows + labels
+
+       Horizontal arrows sit at y=335 (vertically centered on the box row).
+       Their labels sit above the arrow at y=265, well clear of boxes (y=280)
+       and of the arrow line itself. No halo/knockout needed.
+       ============================================================ -->
+
+  <!-- UI → Action : down from UI bottom, left across, down into Action top. -->
+  <path class="arrow" marker-end="url(#arr)"
+        d="M 520 130 L 520 170 L 220 170 L 220 280" />
+
+  <!-- Action → State -->
+  <path class="arrow" marker-end="url(#arr)" d="M 300 335 L 330 335" />
+
+  <!-- State → Workflow Definition -->
+  <path class="arrow" marker-end="url(#arr)" d="M 500 335 L 530 335" />
+
+  <!-- Workflow Definition → Rendering -->
+  <path class="arrow" marker-end="url(#arr)" d="M 850 335 L 880 335" />
+
+  <!-- Rendering → UI : up from Rendering top, left across, up into UI bottom. -->
+  <path class="arrow" marker-end="url(#arr)"
+        d="M 970 280 L 970 170 L 680 170 L 680 130" />
+
+  <!-- ============================================================
+       Worker side-lane arrows (dashed, signal-red)
+
+       Labels are placed in empty white-space, not on the arrows.
+       ============================================================ -->
+
+  <!-- Workflow → Worker (starts/stops). Arrow drops from Workflow center (x=690). -->
+  <path class="arrow-sig" marker-end="url(#arr-sig)" d="M 690 390 L 690 440" />
+  <text x="700" y="415" style="text-anchor:start" class="t-edge-sig">starts / stops</text>
+
+  <!-- Worker → Action (yields results). Orthogonal L: left from worker's left edge,
+       then up into Action's bottom. Label sits just above the horizontal segment. -->
+  <path class="arrow-sig" marker-end="url(#arr-sig)"
+        d="M 440 485 L 220 485 L 220 390" />
+  <text x="330" y="475" class="t-edge-sig">yields results</text>
+
+</svg>

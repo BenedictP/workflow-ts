@@ -3,7 +3,7 @@
 Static site served at GitHub Pages. Three files, no build step, no dependencies.
 
 - `index.html` — structure and content
-- `styles.css` — blueprint / drafting-sheet aesthetic
+- `styles.css` — Minimalist Dark aesthetic (layered slate, warm amber accent, glass cards)
 - `app.js` — interactive state diagram, tab switching, inline tokenizer
 
 ## Local preview

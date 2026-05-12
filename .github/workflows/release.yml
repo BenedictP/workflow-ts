@@ -150,12 +150,16 @@ jobs:
           if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
             git fetch origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}" --force
             TAG_TARGET="$(git rev-list -n 1 "${RELEASE_TAG}")"
-            if [ "${TAG_TARGET}" != "${RELEASE_SHA}" ]; then
-              echo "Tag ${RELEASE_TAG} points to ${TAG_TARGET}, expected ${RELEASE_SHA}."
-              exit 1
+            if [ "${TAG_TARGET}" = "${RELEASE_SHA}" ]; then
+              echo "Tag ${RELEASE_TAG} already exists and points to ${RELEASE_SHA}. Skipping creation."
+              exit 0
             fi
-            echo "Tag ${RELEASE_TAG} already exists and points to ${RELEASE_SHA}. Skipping creation."
-            exit 0
+            if git merge-base --is-ancestor "${TAG_TARGET}" origin/main; then
+              echo "Tag ${RELEASE_TAG} already exists and points to ${TAG_TARGET} (ancestor of main). Skipping creation."
+              exit 0
+            fi
+            echo "Tag ${RELEASE_TAG} points to ${TAG_TARGET}, expected ${RELEASE_SHA}."
+            exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

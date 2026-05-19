@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-19
+
+### Fixed
+
+- React CJS builds no longer reference `import.meta.env`, which caused build warnings and potential runtime errors in non-Vite CJS environments (#158 follow-up).
+- `createBlockingRuntime` is now synchronous as intended, removing an unnecessary `Promise` wrapper in the persistence pipeline.
+- Cleaned up `ReactPersistConfig` type generics to only declare used parameters.
+
+### Changed
+
+- CI release workflow now auto-triggers on push to `main` and gracefully handles existing tags pointing to ancestors (#157, #158).
+- Routine dependency updates: `vite` 8.0.10 → 8.0.13, `vitest` 4.1.5 → 4.1.6, `@vitejs/plugin-react` 6.0.1 → 6.0.2, `@types/node`, `eslint`, `globals`, `jsdom`, and GitHub Actions artifacts.
+
 ## [0.3.0] - 2026-05-12
 
 ### Added

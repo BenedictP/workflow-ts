@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>workflow-ts interactive demos</title>
+    <meta
+      name="description"
+      content="Interactive demos for workflow-ts: counter state, child workflow composition, and render-scoped worker cancellation."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="paper" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="nav" role="banner">
+      <a class="nav__brand" href="./index.html" aria-label="workflow-ts, home">
+        <span class="nav__wordmark">
+          <span class="nav__wordmark-main">workflow<span class="nav__slash">/</span>ts</span>
+        </span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="./index.html">Home</a>
+        <a href="#counter">Counter</a>
+        <a href="#composition">Composition</a>
+        <a href="#workers">Workers</a>
+        <a
+          class="nav__cta"
+          href="https://github.com/BenedictP/workflow-ts"
+          target="_blank"
+          rel="noopener"
+        >
+          <span>GitHub</span>
+        </a>
+      </nav>
+    </header>
+
+    <main class="demo-page">
+      <section class="demo-hero" aria-labelledby="demo-title">
+        <div class="eyebrow">
+          <span class="eyebrow__dot"></span>
+          <span>Interactive architecture lab</span>
+        </div>
+        <h1 id="demo-title" class="hero__title">Run the workflow model by hand.</h1>
+        <p class="hero__lede">
+          These demos mirror the core contracts: explicit state, renderings with callbacks,
+          parent-child output routing, and render-scoped workers keyed by logical effect identity.
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="#counter">
+            <span class="btn__label">Start with counter</span>
+            <span class="btn__icon" aria-hidden="true">→</span>
+          </a>
+          <a class="btn btn--ghost" href="./index.html">Back to landing page</a>
+        </div>
+      </section>
+
+      <section id="counter" class="demo-section" aria-labelledby="counter-title">
+        <div class="section-head">
+          <span class="section-head__num">Demo 01</span>
+          <h2 id="counter-title" class="section-head__title">Simple counter workflow.</h2>
+          <p class="section-head__lede">
+            The UI only receives the current rendering. Each button sends a pure action into the
+            runtime, producing a new state and sometimes an output.
+          </p>
+        </div>
+
+        <div class="demo-lab">
+          <article class="demo-console" aria-label="Counter workflow demo">
+            <div class="demo-flow" aria-hidden="true">
+              <span class="flow-node">Props<br /><b>void</b></span>
+              <span class="flow-arrow">→</span>
+              <span class="flow-node is-active">State<br /><b id="counter-state">count: 0</b></span>
+              <span class="flow-arrow">→</span>
+              <span class="flow-node">Rendering<br /><b id="counter-rendering">atZero</b></span>
+            </div>
+
+            <div class="counter-face">
+              <span class="counter-face__label">Current count</span>
+              <strong id="counter-value">0</strong>
+              <span id="counter-output" class="counter-face__output">No output yet</span>
+            </div>
+
+            <div class="demo-actions">
+              <button class="btn btn--ghost" type="button" data-counter-action="decrement">
+                Decrement
+              </button>
+              <button class="btn btn--primary" type="button" data-counter-action="increment">
+                Increment
+              </button>
+              <button class="btn btn--ghost" type="button" data-counter-action="reset">
+                Reset
+              </button>
+            </div>
+
+            <ol id="counter-log" class="event-log" aria-label="Counter event log"></ol>
+          </article>
+
+          <div class="demo-code-stack">
+            <div class="demo-code-tabs" role="tablist" aria-label="Counter code examples">
+              <button
+                class="demo-code-tab is-active"
+                role="tab"
+                aria-selected="true"
+                data-counter-tab="workflow"
+              >
+                Workflow
+              </button>
+              <button class="demo-code-tab" role="tab" aria-selected="false" data-counter-tab="ui">
+                UI Binding
+              </button>
+            </div>
+
+            <div class="demo-code-panels">
+              <div class="demo-code-panel is-active" data-counter-panel="workflow">
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">counterWorkflow.ts</span>
+                    <span class="panel__pkg">state → rendering → action</span>
+                  </header>
+                  <pre class="panel__code"><code>const counterWorkflow = {
+  initialState: () =&gt; ({ count: 0 }),
+  render: (_props, state, ctx) =&gt; {
+    const increment = () =&gt; ctx.actionSink.send((s) =&gt; ({
+      state: { count: Math.min(s.count + 1, 10) },
+      output: s.count + 1 === 10 ? { type: 'reachedMax', value: 10 } : undefined,
+    }));
+    const decrement = () =&gt; ctx.actionSink.send((s) =&gt; ({
+      state: { count: Math.max(s.count - 1, 0) },
+      output: s.count - 1 === 0 ? { type: 'reachedZero' } : undefined,
+    }));
+    const reset = () =&gt; ctx.actionSink.send(() =&gt; ({ state: { count: 0 } }));
+
+    if (state.count === 0) return { type: 'atZero', count: 0, increment };
+    if (state.count === 10) return { type: 'atMax', count: 10, reset };
+    return { type: 'counting', count: state.count, increment, decrement, reset };
+  },
+};</code></pre>
+                </article>
+              </div>
+
+              <div class="demo-code-panel" data-counter-panel="ui">
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">CounterScreen.tsx</span>
+                    <span class="panel__pkg">React UI binding</span>
+                  </header>
+                  <pre class="panel__code"><code>import { useWorkflow } from '@workflow-ts/react';
+import { counterWorkflow } from './counterWorkflow';
+
+export function CounterScreen() {
+  const rendering = useWorkflow(counterWorkflow, {});
+
+  switch (rendering.type) {
+    case 'atZero':
+      return (
+        &lt;div&gt;
+          &lt;span&gt;{rendering.count}&lt;/span&gt;
+          &lt;button onClick={rendering.increment}&gt;+&lt;/button&gt;
+        &lt;/div&gt;
+      );
+
+    case 'atMax':
+      return (
+        &lt;div&gt;
+          &lt;span&gt;{rendering.count}&lt;/span&gt;
+          &lt;button onClick={rendering.reset}&gt;Reset&lt;/button&gt;
+        &lt;/div&gt;
+      );
+
+    case 'counting':
+      return (
+        &lt;div&gt;
+          &lt;button onClick={rendering.decrement}&gt;−&lt;/button&gt;
+          &lt;span&gt;{rendering.count}&lt;/span&gt;
+          &lt;button onClick={rendering.increment}&gt;+&lt;/button&gt;
+          &lt;button onClick={rendering.reset}&gt;Reset&lt;/button&gt;
+        &lt;/div&gt;
+      );
+  }
+}</code></pre>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="composition" class="demo-section" aria-labelledby="composition-title">
+        <div class="section-head">
+          <span class="section-head__num">Demo 02</span>
+          <h2 id="composition-title" class="section-head__title">
+            Compose parent and child workflows.
+          </h2>
+          <p class="section-head__lede">
+            A parent renders a child with a stable key, receives child outputs, and maps them into
+            parent actions. The child keeps its own state while the parent owns the wider flow.
+          </p>
+        </div>
+
+        <div class="demo-lab demo-lab--wide">
+          <article class="composition-board" aria-label="Workflow composition demo">
+            <div class="workflow-card workflow-card--parent">
+              <span class="workflow-card__kicker">Parent workflow</span>
+              <h3>CartWorkflow</h3>
+              <p id="parent-state">state: editingCart</p>
+            </div>
+
+            <div class="composition-link" aria-hidden="true">
+              <span>renderChild(counterWorkflow, props, 'quantity')</span>
+              <i></i>
+              <span>map output → parent action</span>
+            </div>
+
+            <div class="workflow-card">
+              <span class="workflow-card__kicker">Child workflow</span>
+              <h3>QuantityCounter</h3>
+              <div class="quantity-readout">
+                <button type="button" data-compose-action="decrement">−</button>
+                <strong id="child-count">0</strong>
+                <button type="button" data-compose-action="increment">+</button>
+              </div>
+              <button class="btn btn--ghost" type="button" data-compose-action="reset">
+                Reset child
+              </button>
+            </div>
+
+            <ol id="composition-log" class="event-log" aria-label="Composition event log"></ol>
+          </article>
+
+          <div class="demo-code-stack">
+            <div class="demo-code-tabs" role="tablist" aria-label="Composition code examples">
+              <button
+                class="demo-code-tab is-active"
+                role="tab"
+                aria-selected="true"
+                data-compose-tab="workflow"
+              >
+                Workflow
+              </button>
+              <button class="demo-code-tab" role="tab" aria-selected="false" data-compose-tab="ui">
+                UI Binding
+              </button>
+            </div>
+
+            <div class="demo-code-panels">
+              <div class="demo-code-panel is-active" data-compose-panel="workflow">
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">cartWorkflow.ts</span>
+                    <span class="panel__pkg">stable child key + output mapping</span>
+                  </header>
+                  <pre class="panel__code"><code>render: (props, state, ctx) =&gt; {
+  const quantity = ctx.renderChild(
+    counterWorkflow,
+    { max: 5 },
+    'quantity',
+    (childOutput) =&gt; (parentState) =&gt; ({
+      state:
+        childOutput.type === 'reachedMax'
+          ? { ...parentState, banner: 'Bulk quantity selected' }
+          : { ...parentState, banner: 'Quantity reset to zero' },
+    }),
+  );
+
+  return { type: 'editingCart', quantity };
+};</code></pre>
+                </article>
+
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">counterWorkflow.ts</span>
+                    <span class="panel__pkg">child workflow definition</span>
+                  </header>
+                  <pre class="panel__code"><code>const counterWorkflow = {
+  initialState: () =&gt; ({ count: 0 }),
+  render: (_props, state, ctx) =&gt; {
+    const increment = () =&gt; ctx.actionSink.send((s) =&gt; ({
+      state: { count: Math.min(s.count + 1, 5) },
+      output: s.count + 1 === 5 ? { type: 'reachedMax', value: 5 } : undefined,
+    }));
+    const decrement = () =&gt; ctx.actionSink.send((s) =&gt; ({
+      state: { count: Math.max(s.count - 1, 0) },
+      output: s.count - 1 === 0 ? { type: 'reachedZero' } : undefined,
+    }));
+    const reset = () =&gt; ctx.actionSink.send(() =&gt; ({ state: { count: 0 } }));
+
+    return { type: 'counting', count: state.count, increment, decrement, reset };
+  },
+};</code></pre>
+                </article>
+              </div>
+
+              <div class="demo-code-panel" data-compose-panel="ui">
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">CartScreen.tsx</span>
+                    <span class="panel__pkg">React UI binding</span>
+                  </header>
+                  <pre class="panel__code"><code>import { useWorkflow } from '@workflow-ts/react';
+import { cartWorkflow } from './cartWorkflow';
+
+export function CartScreen() {
+  const rendering = useWorkflow(cartWorkflow, {});
+
+  return (
+    &lt;section&gt;
+      &lt;h2&gt;Cart&lt;/h2&gt;
+      {rendering.banner &amp;&amp; &lt;p className="banner"&gt;{rendering.banner}&lt;/p&gt;}
+
+      &lt;div className="quantity"&gt;
+        &lt;button onClick={rendering.quantity.decrement}&gt;−&lt;/button&gt;
+        &lt;span&gt;{rendering.quantity.count}&lt;/span&gt;
+        &lt;button onClick={rendering.quantity.increment}&gt;+&lt;/button&gt;
+      &lt;/div&gt;
+
+      &lt;button onClick={rendering.quantity.reset}&gt;Reset&lt;/button&gt;
+    &lt;/section&gt;
+  );
+}</code></pre>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="workers" class="demo-section" aria-labelledby="workers-title">
+        <div class="section-head">
+          <span class="section-head__num">Demo 03</span>
+          <h2 id="workers-title" class="section-head__title">Worker keys control lifetime.</h2>
+          <p class="section-head__lede">
+            Start a worker in <code>loading</code>. Move to a state that also declares
+            <code>runWorker(..., 'load')</code> and the same worker keeps running. Move to a state
+            that does not declare that key and the runtime cancels it at the end of render.
+          </p>
+        </div>
+
+        <div class="demo-lab demo-lab--wide">
+          <article class="worker-console" aria-label="Async worker state demo">
+            <div class="worker-mode" role="group" aria-label="Worker transition">
+              <button class="is-active" type="button" data-worker-path="keep">
+                Next state declares worker
+              </button>
+              <button type="button" data-worker-path="cancel">Next state omits worker</button>
+            </div>
+
+            <div class="worker-visual">
+              <div class="worker-ring" id="worker-ring">
+                <span id="worker-state-label">idle</span>
+              </div>
+              <div class="worker-progress" aria-label="Worker progress">
+                <span id="worker-progress-bar"></span>
+              </div>
+              <p id="worker-status">Press Start load to render loading and run the worker.</p>
+              <dl class="worker-profile" aria-label="Workflow state details">
+                <div>
+                  <dt>worker key</dt>
+                  <dd id="worker-key">load</dd>
+                </div>
+                <div>
+                  <dt>rendering</dt>
+                  <dd id="worker-rendering">idle</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="demo-actions">
+              <button class="btn btn--primary" type="button" id="worker-start-btn">
+                <span class="btn__label">Start load</span>
+                <span class="btn__icon" aria-hidden="true">→</span>
+              </button>
+              <button class="btn btn--ghost" type="button" id="worker-process-btn">
+                Take selected transition
+              </button>
+              <button class="btn btn--ghost" type="button" id="worker-leave-btn">Reset</button>
+            </div>
+
+            <ol id="worker-log" class="event-log" aria-label="Worker event log"></ol>
+          </article>
+
+          <div class="demo-code-stack">
+            <div class="demo-code-tabs" role="tablist" aria-label="Worker code examples">
+              <button
+                class="demo-code-tab is-active"
+                role="tab"
+                aria-selected="true"
+                data-worker-tab="workflow"
+              >
+                Workflow
+              </button>
+              <button class="demo-code-tab" role="tab" aria-selected="false" data-worker-tab="ui">
+                UI Binding
+              </button>
+            </div>
+
+            <div class="demo-code-panels">
+              <div class="demo-code-panel is-active" data-worker-panel="workflow">
+                <article class="panel demo-code" id="worker-code-panel">
+                  <header class="panel__bar">
+                    <span class="panel__filename">loadWorkflow.ts</span>
+                    <span class="panel__pkg">same key continues; missing key cancels</span>
+                  </header>
+                  <pre class="panel__code"><code id="worker-code-block"></code></pre>
+                </article>
+              </div>
+
+              <div class="demo-code-panel" data-worker-panel="ui">
+                <article class="panel demo-code">
+                  <header class="panel__bar">
+                    <span class="panel__filename">LoadScreen.tsx</span>
+                    <span class="panel__pkg">React UI binding</span>
+                  </header>
+                  <pre
+                    class="panel__code"
+                  ><code>const rendering = useWorkflow(loadWorkflow, undefined);
+
+if (rendering.type === 'loading') {
+  return (
+    &lt;&gt;
+      &lt;button onClick={rendering.next}&gt;Next state&lt;/button&gt;
+    &lt;/&gt;
+  );
+}
+
+if (rendering.type === 'loaded') {
+  return &lt;p&gt;Loaded.&lt;/p&gt;;
+}</code></pre>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot" role="contentinfo">
+      <div class="foot__inner">
+        <p class="foot__left">
+          <span class="foot__mark">w/ts</span>
+          <span>Interactive demos for explicit state, composition, and workers.</span>
+        </p>
+        <nav class="foot__links" aria-label="Repository links">
+          <a href="./index.html">home</a>
+          <a href="https://github.com/BenedictP/workflow-ts" target="_blank" rel="noopener">repo</a>
+          <a
+            href="https://github.com/BenedictP/workflow-ts/blob/main/docs/index.md"
+            target="_blank"
+            rel="noopener"
+            >docs</a
+          >
+        </nav>
+      </div>
+    </footer>
+
+    <script src="./demo.js" defer></script>
+  </body>
+</html>

@@ -221,7 +221,7 @@ describe('resolveShouldValidateProps', () => {
     ).toBe(false);
   });
 
-  it('falls back to import.meta.env DEV/PROD/MODE signals', () => {
+  it('supports explicit bundler DEV/PROD/MODE signals for callers', () => {
     expect(
       resolveShouldValidateProps({
         reactNativeDev: undefined,

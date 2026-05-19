@@ -157,7 +157,7 @@ const createErrorReporter = (
 };
 
 const createHydrateAction = <S, O>(state: S): Action<S, O> => {
-  return named(HYDRATE_ACTION_NAME, (_: S) => ({ state }));
+  return named(HYDRATE_ACTION_NAME, () => ({ state }));
 };
 
 const createPersistInterceptor = <S, O>(

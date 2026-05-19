@@ -58,6 +58,8 @@ const createPersistenceStore = (): PersistenceStore => {
   };
 };
 
+// Keep unused generic parameters for backwards-compatible public type arity.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export interface ReactPersistConfig<P, S, _O = unknown, _R = unknown> {
   readonly storage: PersistStorage;
   readonly key: PersistKeyResolver<P>;
@@ -144,23 +146,6 @@ const isDevelopmentEnvironment = (): boolean => {
   const nodeEnv = typeof process === 'undefined' ? undefined : process.env['NODE_ENV'];
   if (typeof nodeEnv === 'string') {
     return nodeEnv !== 'production';
-  }
-
-  const importMeta = import.meta as ImportMeta & {
-    readonly env?: {
-      readonly DEV?: unknown;
-      readonly PROD?: unknown;
-      readonly MODE?: unknown;
-    };
-  };
-  if (typeof importMeta.env?.DEV === 'boolean') {
-    return importMeta.env.DEV;
-  }
-  if (typeof importMeta.env?.PROD === 'boolean') {
-    return !importMeta.env.PROD;
-  }
-  if (typeof importMeta.env?.MODE === 'string') {
-    return importMeta.env.MODE !== 'production';
   }
 
   return false;

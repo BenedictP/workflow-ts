@@ -219,8 +219,8 @@
     pushLog('#counter-log', `action: ${type}; state ${moved}`, 'action');
 
     if (type === 'increment' && counterState.count === MAX_COUNTER && previous !== MAX_COUNTER) {
-      setText('#counter-output', "output: { type: 'reachedMax', value: 10 }");
-      pushLog('#counter-log', 'output emitted: reachedMax(10)', 'output');
+      setText('#counter-output', `output: { type: 'reachedMax', value: ${MAX_COUNTER} }`);
+      pushLog('#counter-log', `output emitted: reachedMax(${MAX_COUNTER})`, 'output');
     } else if (type === 'decrement' && counterState.count === 0 && previous !== 0) {
       setText('#counter-output', "output: { type: 'reachedZero' }");
       pushLog('#counter-log', 'output emitted: reachedZero', 'output');
@@ -243,7 +243,13 @@
         t.setAttribute('aria-selected', t.dataset.counterTab === target ? 'true' : 'false');
       });
       qsa('[data-counter-panel]').forEach((p) => {
-        p.classList.toggle('is-active', p.dataset.counterPanel === target);
+        const isActive = p.dataset.counterPanel === target;
+        p.classList.toggle('is-active', isActive);
+        if (isActive) {
+          p.removeAttribute('hidden');
+        } else {
+          p.setAttribute('hidden', '');
+        }
       });
     });
   });
@@ -344,7 +350,13 @@
         t.setAttribute('aria-selected', t.dataset.composeTab === target ? 'true' : 'false');
       });
       qsa('[data-compose-panel]').forEach((p) => {
-        p.classList.toggle('is-active', p.dataset.composePanel === target);
+        const isActive = p.dataset.composePanel === target;
+        p.classList.toggle('is-active', isActive);
+        if (isActive) {
+          p.removeAttribute('hidden');
+        } else {
+          p.setAttribute('hidden', '');
+        }
       });
     });
   });
@@ -453,7 +465,10 @@ const loadWorkflow = {
     setText('#worker-rendering', workerRendering());
 
     const bar = qs('#worker-progress-bar');
-    if (bar) bar.style.width = workerRun ? `${progress}%` : '0%';
+    if (bar) {
+      bar.style.width = workerRun ? `${progress}%` : '0%';
+      bar.setAttribute('aria-valuenow', String(workerRun ? progress : 0));
+    }
 
     if (ring) {
       ring.classList.toggle('is-running', Boolean(workerRun));
@@ -566,7 +581,13 @@ const loadWorkflow = {
         t.setAttribute('aria-selected', t.dataset.workerTab === target ? 'true' : 'false');
       });
       qsa('[data-worker-panel]').forEach((p) => {
-        p.classList.toggle('is-active', p.dataset.workerPanel === target);
+        const isActive = p.dataset.workerPanel === target;
+        p.classList.toggle('is-active', isActive);
+        if (isActive) {
+          p.removeAttribute('hidden');
+        } else {
+          p.setAttribute('hidden', '');
+        }
       });
     });
   });

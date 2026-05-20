@@ -101,7 +101,7 @@
               </button>
             </div>
 
-            <ol id="counter-log" class="event-log" aria-label="Counter event log"></ol>
+            <ol id="counter-log" class="event-log" aria-label="Counter event log" role="log" aria-live="polite" aria-relevant="additions"></ol>
           </article>
 
           <div class="demo-code-stack">
@@ -120,7 +120,7 @@
             </div>
 
             <div class="demo-code-panels">
-              <div class="demo-code-panel is-active" data-counter-panel="workflow">
+              <div class="demo-code-panel is-active" role="tabpanel" data-counter-panel="workflow">
                 <article class="panel demo-code">
                   <header class="panel__bar">
                     <span class="panel__filename">counterWorkflow.ts</span>
@@ -147,7 +147,7 @@
                 </article>
               </div>
 
-              <div class="demo-code-panel" data-counter-panel="ui">
+              <div class="demo-code-panel" role="tabpanel" hidden data-counter-panel="ui">
                 <article class="panel demo-code">
                   <header class="panel__bar">
                     <span class="panel__filename">CounterScreen.tsx</span>
@@ -224,16 +224,16 @@ export function CounterScreen() {
               <span class="workflow-card__kicker">Child workflow</span>
               <h3>QuantityCounter</h3>
               <div class="quantity-readout">
-                <button type="button" data-compose-action="decrement">−</button>
+                <button type="button" data-compose-action="decrement" aria-label="Decrease quantity">−</button>
                 <strong id="child-count">0</strong>
-                <button type="button" data-compose-action="increment">+</button>
+                <button type="button" data-compose-action="increment" aria-label="Increase quantity">+</button>
               </div>
               <button class="btn btn--ghost" type="button" data-compose-action="reset">
                 Reset child
               </button>
             </div>
 
-            <ol id="composition-log" class="event-log" aria-label="Composition event log"></ol>
+            <ol id="composition-log" class="event-log" aria-label="Composition event log" role="log" aria-live="polite" aria-relevant="additions"></ol>
           </article>
 
           <div class="demo-code-stack">
@@ -252,7 +252,7 @@ export function CounterScreen() {
             </div>
 
             <div class="demo-code-panels">
-              <div class="demo-code-panel is-active" data-compose-panel="workflow">
+              <div class="demo-code-panel is-active" role="tabpanel" data-compose-panel="workflow">
                 <article class="panel demo-code">
                   <header class="panel__bar">
                     <span class="panel__filename">cartWorkflow.ts</span>
@@ -299,7 +299,7 @@ export function CounterScreen() {
                 </article>
               </div>
 
-              <div class="demo-code-panel" data-compose-panel="ui">
+              <div class="demo-code-panel" role="tabpanel" hidden data-compose-panel="ui">
                 <article class="panel demo-code">
                   <header class="panel__bar">
                     <span class="panel__filename">CartScreen.tsx</span>
@@ -357,7 +357,7 @@ export function CartScreen() {
               <div class="worker-ring" id="worker-ring">
                 <span id="worker-state-label">idle</span>
               </div>
-              <div class="worker-progress" aria-label="Worker progress">
+              <div class="worker-progress" aria-label="Worker progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                 <span id="worker-progress-bar"></span>
               </div>
               <p id="worker-status">Press Start load to render loading and run the worker.</p>
@@ -384,7 +384,7 @@ export function CartScreen() {
               <button class="btn btn--ghost" type="button" id="worker-leave-btn">Reset</button>
             </div>
 
-            <ol id="worker-log" class="event-log" aria-label="Worker event log"></ol>
+            <ol id="worker-log" class="event-log" aria-label="Worker event log" role="log" aria-live="polite" aria-relevant="additions"></ol>
           </article>
 
           <div class="demo-code-stack">
@@ -403,7 +403,7 @@ export function CartScreen() {
             </div>
 
             <div class="demo-code-panels">
-              <div class="demo-code-panel is-active" data-worker-panel="workflow">
+              <div class="demo-code-panel is-active" role="tabpanel" data-worker-panel="workflow">
                 <article class="panel demo-code" id="worker-code-panel">
                   <header class="panel__bar">
                     <span class="panel__filename">loadWorkflow.ts</span>
@@ -413,7 +413,7 @@ export function CartScreen() {
                 </article>
               </div>
 
-              <div class="demo-code-panel" data-worker-panel="ui">
+              <div class="demo-code-panel" role="tabpanel" hidden data-worker-panel="ui">
                 <article class="panel demo-code">
                   <header class="panel__bar">
                     <span class="panel__filename">LoadScreen.tsx</span>

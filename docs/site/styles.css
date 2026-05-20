@@ -2661,6 +2661,11 @@ section + section {
   transition: all 200ms ease-out;
 }
 
+.demo-code-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .demo-code-tab:hover {
   border-color: var(--border-hover);
   color: var(--fg);
@@ -2804,6 +2809,11 @@ section + section {
   letter-spacing: -0.04em;
 }
 
+.quantity-readout button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .composition-board .event-log {
   grid-column: 1 / -1;
   min-height: 140px;
@@ -2826,6 +2836,12 @@ section + section {
   padding: 10px 14px;
   font: 500 13px/1 var(--body);
   cursor: pointer;
+}
+
+.worker-mode button:focus-visible,
+.worker-states button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .worker-mode button.is-active,

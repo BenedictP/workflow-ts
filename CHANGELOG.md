@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an interactive workflow architecture demo page covering counters, child workflow composition, and a worker continuation example.
+
 ## [0.3.1] - 2026-05-19
 
 ### Fixed

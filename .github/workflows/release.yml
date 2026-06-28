@@ -142,7 +142,8 @@ jobs:
         run: |
           RELEASE_TAG="${{ needs.publish.outputs.release_tag }}"
           RELEASE_SHA="${{ needs.publish.outputs.release_sha }}"
-          git fetch origin main --depth=1
+          # checkout already fetches full history (fetch-depth: 0)
+          # avoid shallow fetch that breaks merge-base --is-ancestor
           if ! git merge-base --is-ancestor "${RELEASE_SHA}" origin/main; then
             echo "Published commit ${RELEASE_SHA} is not reachable from origin/main."
             exit 1

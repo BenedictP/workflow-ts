@@ -1,6 +1,6 @@
 {
   "name": "@workflow-ts/react",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "React bindings for workflow-ts",
   "keywords": [
     "workflow",

@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-29
+
 ### Added
 
 - Added an interactive workflow architecture demo page covering counters, child workflow composition, and a worker continuation example.
+
+### Fixed
+
+- Fixed the release workflow's shallow fetch that broke the ancestor check, preventing proper release auto-triggering (#186).
+
+### Changed
+
+- Bumped `actions/checkout` from 6 to 7 in the core CI actions group.
+- Bumped `@types/node` to 26.0.0 in the types-build-toolchain group.
+- Bumped `happy-dom` in the testing group.
+- Bumped `vite` to 8.1.0 and `@vitejs/plugin-react` to 6.0.3.
+- Bumped `vitest` to 4.1.7 in the testing group.
+- Bumped `globals` to 17.7.0 and updated linting group dependencies.
+- Bumped `@types/react` in the react-ecosystem group.
 
 ## [0.3.1] - 2026-05-19
 
@@ -95,7 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced React structural `Set` comparison allocations by using deep-equality context checkpoints instead of cloning context per structural candidate.
 - Fixed `debounceWorker()` abort listener cleanup so listeners are removed after both abort and normal debounce completion.
 
-[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/BenedictP/workflow-ts/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/BenedictP/workflow-ts/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/BenedictP/workflow-ts/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/BenedictP/workflow-ts/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/BenedictP/workflow-ts/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/BenedictP/workflow-ts/compare/v0.1.2...v0.1.3
